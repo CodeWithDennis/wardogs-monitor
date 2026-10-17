@@ -2,7 +2,7 @@
 import { Link2, X } from 'lucide-vue-next';
 import { computed } from 'vue';
 import { banLists, openSyncPreview, startupDifferences } from '@/lib/banlists';
-import { state } from '@/lib/store';
+import { detailFolded, state } from '@/lib/store';
 
 /**
  * A strip above the page when the linked ban lists differed at start-up.
@@ -12,7 +12,7 @@ import { state } from '@/lib/store';
 const props = defineProps<{ wide: boolean }>();
 
 /** Without the detail panel beside it (or with it folded), the window's own buttons sit over the banner's right end. */
-const underWindowButtons = computed(() => props.wide || state.preferences.detailCollapsed);
+const underWindowButtons = computed(() => props.wide || detailFolded.value);
 
 const show = computed(() => !banLists.bannerDismissed && startupDifferences.value !== null && banLists.preview === null);
 
