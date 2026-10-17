@@ -1,6 +1,6 @@
 import { app, safeStorage } from 'electron';
 import { randomUUID } from 'node:crypto';
-import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { readGroups, toFile } from './banlists.mjs';
 import { change, resolve } from './preferences.mjs';
@@ -23,8 +23,31 @@ async function readJson(name, fallback) {
     }
 }
 
-/** Write through a temporary file, so a crash never leaves half a file. */
-/** Writes per file, one after another, so two saves at once never trip over each other. */
+/**
+ * Windows refuses to replace a file while something has it open (a read
+ * from this app, a virus scanner), so a refused rename is tried again for
+ * a moment before it counts as failed.
+ */
+async function replace(temporary, target) {
+    for (let attempt = 0; ; attempt++) {
+        try {
+            return await rename(temporary, target);
+        } catch (error) {
+            if (attempt >= 8 || !['EPERM', 'EACCES', 'EBUSY'].includes(error?.code)) {
+                await rm(temporary, { force: true });
+                throw error;
+            }
+
+            await new Promise((done) => setTimeout(done, 25 * (attempt + 1)));
+        }
+    }
+}
+
+/**
+ * Write through a temporary file, so a crash never leaves half a file.
+ * Writes per file go one after another, so two saves at once never trip
+ * over each other.
+ */
 const writing = new Map();
 
 function writeJson(name, value) {
@@ -34,7 +57,7 @@ function writeJson(name, value) {
         // Each write gets its own temporary file, so a second save can't rename the first one's away.
         const temporary = `${target}.${randomUUID()}.tmp`;
         await writeFile(temporary, JSON.stringify(value, null, 2), 'utf8');
-        await rename(temporary, target);
+        await replace(temporary, target);
     };
 
     const next = (writing.get(name) ?? Promise.resolve()).then(run, run);
