@@ -1,0 +1,15 @@
+{
+    "name": "Wardogs RCON",
+    "tagline": "Server control",
+    "description": "Monitor, moderate and run your Wardogs dedicated servers from one Windows app.",
+    "appId": "app.wardogsrcon.desktop",
+    "dataFolder": "Wardogs RCON",
+    "previousDataFolders": [
+        "Handler Server Panel",
+        "Phantom Server Control"
+    ],
+    "website": "",
+    "supportEmail": "",
+    "licenseKeyPrefix": "WRCON",
+    "trialDays": 14
+}

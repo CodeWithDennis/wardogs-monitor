@@ -1,0 +1,68 @@
+{
+  "name": "wardogs-rcon",
+  "productName": "Wardogs RCON",
+  "version": "0.1.0",
+  "description": "Monitor, moderate and run your Wardogs dedicated servers from one Windows app.",
+  "private": true,
+  "author": "Wardogs RCON",
+  "type": "module",
+  "main": "electron/main.mjs",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "mock": "node mock/wardogs-mock.mjs",
+    "build": "vue-tsc --noEmit && vite build",
+    "start": "npm run build && electron .",
+    "dist": "npm run build && electron-builder --win --publish never",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "node --test \"tests/*.test.mjs\"",
+    "screenshots": "npm run build && node scripts/screenshots.mjs",
+    "check": "vue-tsc --noEmit && node --test \"tests/*.test.mjs\""
+  },
+  "build": {
+    "appId": "app.wardogsrcon.desktop",
+    "productName": "Wardogs RCON",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**",
+      "mock/**",
+      "dist/**",
+      "brand.json",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "devDependencies": {
+    "@fontsource/inter": "^5.3.0",
+    "@vitejs/plugin-vue": "^6.0.10",
+    "electron": "^44.9.0",
+    "electron-builder": "^26.15.3",
+    "lucide-vue-next": "^1.0.0",
+    "typescript": "~5.9",
+    "vite": "^8.3.4",
+    "vue": "^3.5.44",
+    "vue-tsc": "^3.3.13"
+  },
+  "allowScripts": {
+    "electron@44.9.0": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CodeWithDennis/wardogs-rcon.git"
+  },
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22"
+  }
+}
