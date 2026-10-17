@@ -363,7 +363,7 @@ function registerIpc() {
     handle('activity:list', (id) => activity.list(id ? String(id) : null));
     handle('preferences:get', () => preferences.get());
     handle('preferences:set', async (changes) => {
-        const allowed = ['refreshSeconds', 'confirmActions', 'miniOpacity', 'miniAlwaysOnTop', 'lastServerId', 'theme', 'accent', 'railCollapsed', 'sidebarCollapsed', 'notifyServerDown', 'notifyWatched', 'watchlist', 'broadcasts'];
+        const allowed = ['refreshSeconds', 'confirmActions', 'miniOpacity', 'miniAlwaysOnTop', 'lastServerId', 'theme', 'accent', 'railCollapsed', 'sidebarCollapsed', 'detailCollapsed', 'titleFont', 'notifyServerDown', 'notifyWatched', 'watchlist', 'broadcasts'];
         const next = await preferences.set(Object.fromEntries(Object.entries(changes ?? {}).filter(([key]) => allowed.includes(key))));
 
         if (miniWindow) {
