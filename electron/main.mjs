@@ -571,7 +571,10 @@ async function openWidget(kind, serverId, saved) {
 
     const spec = WIDGET_KINDS[kind];
     const areas = screen.getAllDisplays().map((display) => display.workArea);
-    const bounds = saved?.bounds && onScreen(saved.bounds, areas) ? saved.bounds : placeWidget(kind, screen.getPrimaryDisplay().workArea, widgetWindows.size);
+    // A new one opens on the screen the app is on, clear of the widgets already open.
+    const area = (mainWindow ? screen.getDisplayMatching(mainWindow.getBounds()) : screen.getPrimaryDisplay()).workArea;
+    const taken = [...widgetWindows.values()].filter((window) => !window.isDestroyed()).map((window) => window.getBounds());
+    const bounds = saved?.bounds && onScreen(saved.bounds, areas) ? saved.bounds : placeWidget(kind, area, taken);
     const id = saved?.id ?? randomUUID();
 
     const window = new BrowserWindow({

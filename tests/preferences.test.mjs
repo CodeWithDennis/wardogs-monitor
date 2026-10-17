@@ -33,12 +33,21 @@ test('only what was set is stored', () => {
 });
 
 test('values are kept to their shapes', () => {
-    const preferences = resolve({ refreshSeconds: 999, zoom: 1.3, layoutVersion: 2, watchlist: [{ steamId: '123' }, { steamId: '76561198000000001', name: ' Ace ' }] });
+    const preferences = resolve({ refreshSeconds: 999, zoom: 1.3, layoutVersion: 2, watchlist: [{ steamId: '' }, { steamId: 'bad id!' }, { steamId: '76561198000000001', name: ' Ace ' }] });
 
     assert.equal(preferences.refreshSeconds, 60);
     assert.equal(preferences.zoom, 1.25);
     assert.equal(preferences.watchlist.length, 1);
     assert.equal(preferences.watchlist[0].name, 'Ace');
+});
+
+test('players with IDs other than Steam IDs can be watched too', () => {
+    const preferences = resolve({ watchlist: [{ steamId: ' 0002a1b2c3d4e5f6 ', name: 'Epic player' }, { steamId: '123' }] });
+
+    assert.deepEqual(
+        preferences.watchlist.map((entry) => entry.steamId),
+        ['0002a1b2c3d4e5f6', '123'],
+    );
 });
 
 test('zoom saved for the old, smaller layout starts over', () => {

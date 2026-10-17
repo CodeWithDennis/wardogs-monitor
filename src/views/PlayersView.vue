@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ArrowDown, ArrowUp, Ban, MessageSquare, Star, UserMinus, UserX, Users } from 'lucide-vue-next';
-import { computed, onMounted, onUnmounted } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import SearchField from '@/components/SearchField.vue';
 import TimeAgo from '@/components/TimeAgo.vue';
 import ViewHeader from '@/components/ViewHeader.vue';
@@ -31,6 +31,7 @@ const COLUMNS: { key: SortKey; label: string; title: string; className: string; 
 
 function sortBy(key: SortKey): void {
     const column = COLUMNS.find((entry) => entry.key === key)!;
+    heldOrder.value = null;
     state.playersSort = state.playersSort.key === key ? { key, dir: state.playersSort.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: column.firstDir };
 }
 
@@ -93,12 +94,30 @@ const left = computed(() => (state.selectedId ? state.left[state.selectedId] ?? 
 
 const leftShown = computed(() => left.value.filter((player) => matches(player, searchTerm.value)));
 
+/**
+ * While the pointer is over the rows they hold their places: a new reading
+ * would otherwise re-sort them (by kills or ping, say) and move the row
+ * under the cursor between press and release, so a star, kick or message
+ * click landed nowhere. Players who joined meanwhile go at the end.
+ */
+const heldOrder = ref<Map<string, number> | null>(null);
+
+function holdOrder(): void {
+    heldOrder.value ??= new Map(players.value.map((player, index) => [player.steamId, index]));
+}
+
+const releaseOrder = () => (heldOrder.value = null);
+
+watch([faction, searchTerm], releaseOrder);
+
 const players = computed(() => {
     const term = searchTerm.value;
-
-    return livePlayers.value
+    const sorted = livePlayers.value
         .filter((player) => (faction.value === 'all' || (faction.value === 'watched' ? isWatched(player.steamId) : player.faction === faction.value)) && matches(player, term))
         .sort(compare);
+    const held = heldOrder.value;
+
+    return held ? sorted.sort((a, b) => (held.get(a.steamId) ?? Infinity) - (held.get(b.steamId) ?? Infinity)) : sorted;
 });
 
 function select(steamId: string): void {
@@ -136,7 +155,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
         <SearchField placeholder="Search players by name or Steam ID" :count="faction === 'left' ? leftShown.length : players.length" />
     </div>
 
-    <div class="view-body flush" @contextmenu.self.prevent>
+    <div class="view-body flush" @contextmenu.self.prevent @pointerleave="releaseOrder">
 
         <!-- Players who left this server since the app opened -->
         <template v-if="faction === 'left'">
@@ -192,6 +211,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
             v-memo="[player, state.selectedPlayer === player.steamId, isWatched(player.steamId), watchedEntry(player.steamId)?.note, leaving.has(player.steamId)]"
             class="row player"
             :class="{ active: state.selectedPlayer === player.steamId, leaving: leaving.has(player.steamId) }"
+            @pointerenter="holdOrder"
             @click="select(player.steamId)"
             @contextmenu="openPlayerMenu($event, player)"
         >
