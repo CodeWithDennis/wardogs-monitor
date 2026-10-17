@@ -126,4 +126,9 @@ button svg {
     opacity: 0;
     transform: translateX(17.5px);
 }
+
+/* The others slide into place when one goes, instead of jumping. */
+.toast-move {
+    transition: transform 0.2s ease;
+}
 </style>

@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { Ban as BanIcon, Link2, Plus, ShieldCheck } from 'lucide-vue-next';
+import { Ban as BanIcon, Link2, LoaderCircle, Plus, ShieldCheck } from 'lucide-vue-next';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import Modal from '@/components/Modal.vue';
 import SearchField from '@/components/SearchField.vue';
 import ViewHeader from '@/components/ViewHeader.vue';
 import { dateTime } from '@/lib/format';
 import { groupOf, openSyncPreview } from '@/lib/banlists';
-import { act, busy, state } from '@/lib/store';
+import { act, busy, searchTerm, state } from '@/lib/store';
 import type { BanSyncPlan, BansAnswer } from '@/types';
 
 /** Everyone banned from the server; open one to lift it, or ban a Steam ID that is not online. */
@@ -69,7 +69,7 @@ const liftedHere = computed(() => new Set(linkedPlan.value?.servers.find((server
 const pendingHere = computed(() => linkedPlan.value?.servers.find((server) => server.serverId === state.selectedId)?.toAdd.length ?? 0);
 
 const bans = computed(() => {
-    const term = state.search.trim().toLowerCase();
+    const term = searchTerm.value;
 
     return (answer.value?.bans ?? [])
         .filter((ban) => term === '' || ban.steamId.includes(term) || (ban.reason ?? '').toLowerCase().includes(term))
@@ -122,8 +122,8 @@ async function ban(): Promise<void> {
             <div class="head">
                 <span>Steam ID</span>
                 <span>Reason</span>
-                <span>By</span>
-                <span class="right">Banned</span>
+                <span class="c-by">By</span>
+                <span class="right c-when">Banned</span>
             </div>
             <div
                 v-for="entry in bans"
@@ -138,18 +138,26 @@ async function ban(): Promise<void> {
                     <span v-if="liftedHere.has(entry.steamId)" class="pill pill-ok mark" title="Lifted on the shared list: the next sync lifts it here">To lift</span>
                     <span v-else-if="missingElsewhere[entry.steamId]" class="pill pill-gold mark" :title="`Not yet on ${missingElsewhere[entry.steamId].join(', ')}`">Not synced</span>
                 </span>
-                <span class="muted truncate">{{ entry.bannedBy ?? '–' }}</span>
-                <span class="right muted">{{ entry.bannedAt ? dateTime(entry.bannedAt) : 'Undated' }}</span>
+                <span class="muted truncate c-by">{{ entry.bannedBy ?? '–' }}</span>
+                <span class="right muted c-when">{{ entry.bannedAt ? dateTime(entry.bannedAt) : 'Undated' }}</span>
             </div>
             <div v-if="bans.length === 0" class="empty">
                 <ShieldCheck />
-                <span>{{ state.search ? 'No ban matches that search.' : 'Nobody is banned.' }}</span>
+                <span>{{ state.search ? 'No ban matches that search.' : 'Nobody is banned. Ban a Steam ID with the button above, or a player who is online from Players.' }}</span>
             </div>
         </template>
 
-        <template v-else>
-            <div v-for="i in 5" :key="i" class="skeleton" style="height: 36px; margin: 6px 30px" />
-        </template>
+        <div v-else aria-busy="true" aria-label="Loading bans">
+            <div class="head">
+                <span>Steam ID</span>
+                <span>Reason</span>
+                <span class="c-by">By</span>
+                <span class="right c-when">Banned</span>
+            </div>
+            <div class="skeleton-list rows-skeleton">
+                <div v-for="i in 6" :key="i" class="skeleton" style="height: 30px" />
+            </div>
+        </div>
     </div>
 
     <Modal :open="adding" title="Ban a Steam ID" @close="adding = false">
@@ -169,7 +177,7 @@ async function ban(): Promise<void> {
         </form>
         <template #footer>
             <button type="button" class="btn btn-ghost" @click="adding = false">Cancel</button>
-            <button type="button" class="btn btn-danger" :disabled="!/^\d{17}$/.test(form.steamId.trim()) || busy.ban" @click="ban">Ban</button>
+            <button type="button" class="btn btn-danger" :disabled="!/^\d{17}$/.test(form.steamId.trim()) || busy.ban" @click="ban"><LoaderCircle v-if="busy.ban" class="spin" />Ban</button>
         </template>
     </Modal>
 </template>
@@ -203,6 +211,13 @@ async function ban(): Promise<void> {
 
 .ban {
     min-height: 44px;
+    /* Rows out of view are skipped when laying out and painting, for long ban lists. */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 44px;
+}
+
+.rows-skeleton {
+    padding: 6px 28.5px 0 33px;
 }
 
 /* The linked ban list strip under the toolbar. */
@@ -272,5 +287,38 @@ async function ban(): Promise<void> {
 .note {
     margin: 0;
     font-size: 14px;
+}
+
+/* A narrower page drops who banned, then when, so the list never scrolls sideways. */
+@container page (max-width: 720px) {
+    .head,
+    .ban {
+        grid-template-columns: 200px minmax(0, 1fr) 120px;
+        padding: 0 18px 0 22px;
+    }
+
+    .c-by {
+        display: none;
+    }
+
+    .linked {
+        flex-wrap: wrap;
+        padding: 9px 20px;
+    }
+
+    .pad {
+        padding: 17.5px 20px;
+    }
+}
+
+@container page (max-width: 520px) {
+    .head,
+    .ban {
+        grid-template-columns: 190px minmax(0, 1fr);
+    }
+
+    .c-when {
+        display: none;
+    }
 }
 </style>

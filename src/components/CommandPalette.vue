@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { Ban, Gauge, LayoutGrid, Map as MapIcon, Megaphone, Palette, PictureInPicture2, Plus, Repeat, RotateCcw, ScrollText, Search, Server, Settings2, SkipForward, SlidersHorizontal, Star, UserMinus, Users } from 'lucide-vue-next';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-import { ago } from '@/lib/format';
-import { act, now, openMini, openOptions, openView, selectServer, selectedServer, state, type View } from '@/lib/store';
+import TimeAgo from '@/components/TimeAgo.vue';
+import { act, openMini, openOptions, openView, selectServer, selectedServer, state, type View } from '@/lib/store';
 import { isWatched } from '@/lib/watchlist';
 
 /**
@@ -18,7 +18,11 @@ interface Item {
     icon: unknown;
     color?: string | null;
     watched?: boolean;
+    /** When a player left, shown as "3m ago" after the detail. */
+    leftAt?: number;
     keywords: string;
+    /** Label and keywords in lower case, worked out once rather than on every key. */
+    haystack?: string;
     run: () => void;
 }
 
@@ -55,7 +59,8 @@ const players = computed<Item[]>(() =>
             id: `left:${server.id}:${player.steamId}`,
             group: 'Left recently',
             label: player.name,
-            detail: `left ${server.name} ${ago(new Date(player.leftAt).toISOString(), now.value)}`,
+            detail: `left ${server.name}`,
+            leftAt: player.leftAt,
             icon: UserMinus,
             watched: isWatched(player.steamId),
             keywords: `${player.name} ${player.steamId} ${server.name} left`,
@@ -148,16 +153,31 @@ const actions = computed<Item[]>(() => {
     return list;
 });
 
+const haystack = (item: Item): string => (item.haystack ??= `${item.label} ${item.keywords}`.toLowerCase());
+
 /** Every word of the query must appear somewhere in the item. */
 const results = computed<Item[]>(() => {
     const terms = query.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    const all = [...players.value, ...servers.value, ...views.value, ...actions.value];
 
     if (terms.length === 0) {
         return [...servers.value, ...views.value.slice(0, 6), ...actions.value];
     }
 
-    return all.filter((item) => terms.every((term) => `${item.label} ${item.keywords}`.toLowerCase().includes(term))).slice(0, 60);
+    const all = [...players.value, ...servers.value, ...views.value, ...actions.value];
+    const found: Item[] = [];
+
+    // Stops at the 60 the list shows, instead of checking everyone on every server.
+    for (const item of all) {
+        if (terms.every((term) => haystack(item).includes(term))) {
+            found.push(item);
+
+            if (found.length === 60) {
+                break;
+            }
+        }
+    }
+
+    return found;
 });
 
 const groups = computed(() => {
@@ -239,7 +259,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
                                 <component :is="item.icon" class="icon" :style="item.color ? { color: item.color } : undefined" />
                                 <span class="label truncate">{{ item.label }}</span>
                                 <Star v-if="item.watched" class="star" />
-                                <span v-if="item.detail" class="detail truncate">{{ item.detail }}</span>
+                                <span v-if="item.detail" class="detail truncate">{{ item.detail }}<template v-if="item.leftAt"> <TimeAgo :at="item.leftAt" /></template></span>
                             </button>
                         </section>
                         <p v-if="results.length === 0" class="none">Nothing matches “{{ query }}”.</p>

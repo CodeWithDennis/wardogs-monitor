@@ -4,7 +4,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import SearchField from '@/components/SearchField.vue';
 import ViewHeader from '@/components/ViewHeader.vue';
 import { dateTime } from '@/lib/format';
-import { state } from '@/lib/store';
+import { searchTerm, state } from '@/lib/store';
 import type { ActivityEntry } from '@/types';
 
 /**
@@ -12,7 +12,8 @@ import type { ActivityEntry } from '@/types';
  * keeps its own log; this one covers the desktop.
  */
 const filter = ref<'all' | 'failed'>('all');
-const entries = ref<ActivityEntry[]>([]);
+/** Null until the log is first read, for the skeleton. */
+const entries = ref<ActivityEntry[] | null>(null);
 
 async function load(): Promise<void> {
     entries.value = await window.panel.activity.list(state.activityServer);
@@ -24,9 +25,9 @@ watch([() => state.activityServer, () => state.revision], load);
 const serverName = computed(() => state.servers.find((server) => server.id === state.activityServer)?.name ?? null);
 
 const shown = computed(() => {
-    const term = state.search.trim().toLowerCase();
+    const term = searchTerm.value;
 
-    return entries.value.filter((entry) => (filter.value === 'all' || !entry.ok) && (term === '' || entry.summary.toLowerCase().includes(term)));
+    return (entries.value ?? []).filter((entry) => (filter.value === 'all' || !entry.ok) && (term === '' || entry.summary.toLowerCase().includes(term)));
 });
 
 /** Group by day, like a feed. */
@@ -78,9 +79,17 @@ const days = computed(() => {
             </div>
         </section>
 
-        <div v-if="days.length === 0" class="empty">
+        <div v-if="entries === null" aria-busy="true" aria-label="Loading the activity log">
+            <div class="skeleton" style="height: 12px; width: 160px; margin-bottom: 15px" />
+            <div v-for="i in 7" :key="i" class="entry">
+                <div class="skeleton" style="height: 14px; width: 48.5px" />
+                <div class="skeleton" style="height: 14px" :style="{ width: `${35 + ((i * 23) % 45)}%` }" />
+            </div>
+        </div>
+
+        <div v-else-if="days.length === 0" class="empty">
             <ScrollText />
-            <span>{{ filter === 'failed' ? 'Nothing failed.' : 'Nothing done from this app yet.' }}</span>
+            <span>{{ state.search ? 'Nothing matches that search.' : filter === 'failed' ? 'Nothing failed.' : 'Nothing done from this app yet. Kicks, bans, broadcasts, map changes and saved settings are logged here.' }}</span>
         </div>
     </div>
 </template>
@@ -118,6 +127,26 @@ const days = computed(() => {
 
 .summary {
     overflow-wrap: anywhere;
+}
+
+.entry .pill {
+    flex: none;
+    max-width: 40%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* A narrow page: the server's name moves under the line instead of squeezing it. */
+@container page (max-width: 560px) {
+    .entry {
+        flex-wrap: wrap;
+    }
+
+    .entry .pill {
+        max-width: 100%;
+        margin-left: calc(9px + 48.5px + 31px);
+    }
 }
 
 .error {

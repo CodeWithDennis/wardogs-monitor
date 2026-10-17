@@ -44,8 +44,14 @@ export async function captureViews({ app, mainWindow, openMini, getMini, dir }) 
     const { password } = await servers.target(demo.id);
     await servers.save({ name: 'Alpha Company | Events', host: '127.0.0.1', port: demo.port, password });
     await servers.save({ name: 'Alpha Company | Training', host: '127.0.0.1', port: 1, password: 'x' });
+    const loaded = new Promise((resolve) => web.once('did-finish-load', resolve));
     web.reload();
-    await new Promise((resolve) => web.once('did-finish-load', resolve));
+    // The boot screen, while it waits for the server that is down to answer.
+    await new Promise((resolve) => web.once('dom-ready', resolve));
+    await wait(150);
+    console.log('[capture] boot screen:', await run(`(document.querySelector('.boot-screen .boot-status')?.textContent ?? 'gone') + ' / hidden: ' + document.hidden`));
+    await shot('00b-boot');
+    await loaded;
     await wait(4500);
 
     const click = (selector) => run(`document.querySelector(${JSON.stringify(selector)})?.click()`);
@@ -302,6 +308,41 @@ async function captureDialogs({ mainWindow, run, click, shot }) {
 
     mainWindow.setSize(1500, 920);
     await wait(800);
+}
+
+/**
+ * Tray test (PANEL_TRAYTEST=<file>): check the tray icon is in the
+ * notification area, close the window with its X and check it only hid
+ * (the app still running), bring it back the way the tray menu does, then
+ * quit through the tray menu's own Quit item. Writes what it saw to the
+ * file as JSON; the app must exit by itself afterwards.
+ */
+export async function trayTest({ mainWindow, tray, trayMenu, file }) {
+    const web = mainWindow.webContents;
+    await new Promise((resolve) => (web.isLoading() ? web.once('did-finish-load', resolve) : resolve()));
+    await wait(2500);
+
+    const report = { tray: Boolean(tray), trayBounds: tray?.getBounds() ?? null, visibleAtStart: mainWindow.isVisible() };
+    report.bootGone = await web.executeJavaScript(`!document.querySelector('.boot-screen')`);
+
+    // The demo server, so the menu has a server and a status line to show.
+    await web.executeJavaScript(`window.panel.servers.addDemo()`);
+    const reloaded = new Promise((resolve) => web.once('did-finish-load', resolve));
+    web.reload();
+    await reloaded;
+    await wait(3000);
+    report.menu = trayMenu().items.map((item) => (item.type === 'separator' ? '---' : `${item.label}${item.enabled ? '' : ' (disabled)'}`));
+
+    mainWindow.close();
+    await wait(800);
+    report.afterClose = { windowExists: !mainWindow.isDestroyed(), visible: !mainWindow.isDestroyed() && mainWindow.isVisible() };
+
+    trayMenu().items.find((item) => item.label.startsWith('Open '))?.click();
+    await wait(800);
+    report.afterOpen = { visible: mainWindow.isVisible() };
+
+    await writeFile(file, JSON.stringify(report, null, 2));
+    trayMenu().items.find((item) => item.label.startsWith('Quit '))?.click();
 }
 
 /**

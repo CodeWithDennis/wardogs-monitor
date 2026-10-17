@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeTheme, screen, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, Notification, screen, shell, Tray } from 'electron';
 import { cpSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,11 +10,15 @@ import { licence } from './license.mjs';
 import { CHECK_EVERY_MS } from './license-online.mjs';
 import { dropServer, removeGroup, saveGroup } from './banlists.mjs';
 import { act, banListPlan, banListSync, bans, catalog, clearCache, identity, live, probe, readSettings, rotation } from './service.mjs';
+import { cleanBootColors } from './preferences.mjs';
 import { activity, banLists, preferences, servers, ZOOM_STEPS } from './store.mjs';
+import { cleanSummary, serverLabel, statusLine, tooltip } from './tray-status.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const devServer = process.env.VITE_DEV_SERVER_URL;
-const BACKGROUND = '#0e1324';
+const ICON = path.join(here, '..', 'build', 'icon.png');
+/** 16 px, with @1.25x … @3x siblings Electron picks up for scaled displays (scripts/make-icon.mjs). */
+const TRAY_ICON = path.join(here, '..', 'build', 'tray', 'tray.png');
 
 // Screenshots and tests run against their own data folder, never the real one.
 if (process.env.PANEL_USER_DATA) {
@@ -50,18 +54,65 @@ nativeTheme.themeSource = 'dark';
 // zoomed in. The app handles its own shortcuts (see attachZoom).
 Menu.setApplicationMenu(null);
 
+// In the tray the window is hidden, and Chromium slows a hidden page's
+// timers to once a minute after five minutes. The window keeps reading the
+// servers every 30 seconds while hidden so down/back and watched-player
+// alerts stay timely, so that extra slowdown is switched off.
+app.commandLine.appendSwitch('disable-features', 'IntensiveWakeUpThrottling');
+
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
 /** @type {BrowserWindow | null} */
 let miniWindow = null;
 /** @type {{ port: number, close: () => Promise<void> } | null} */
 let demo = null;
+/** Saved servers are listed only once the demo server (if any) is up and its port saved. */
+let demoReady = Promise.resolve();
 
-function load(window, view) {
+/**
+ * The preferences as last saved, kept here so window events (close,
+ * minimise) can read them on the spot: they cannot wait for a file read.
+ *
+ * @type {Record<string, any>}
+ */
+let prefs = {};
+
+/** Set once the app is really quitting, so closing the window then closes it instead of hiding it to the tray. */
+let isQuitting = false;
+/** Ban-list syncs running now: quitting asks first, as stopping one part-way leaves servers out of step. */
+let banSyncsRunning = 0;
+let quitDuringSync = false;
+let askingToQuit = false;
+
+/** @type {Tray | null} */
+let tray = null;
+/** @type {import('./tray-status.mjs').TraySummary | null} */
+let traySummary = null;
+/** The last notification main showed, kept so its click handler is not garbage-collected. */
+let notice = null;
+/** When the window last lost focus: clicking the tray icon takes focus away first. */
+let lastBlurAt = 0;
+/** Started hidden while maximised: maximise on first show (maximising a hidden window shows it). */
+let maximizeOnShow = false;
+
+/** Save preference changes and keep the copy above current. */
+async function savePreferences(changes) {
+    prefs = await preferences.set(changes);
+
+    return prefs;
+}
+
+/**
+ * Load the page at a view. The main window also gets the theme's colours
+ * in the address, which public/boot.js paints the boot screen with before
+ * anything else runs.
+ */
+function load(window, view, query = {}) {
     if (devServer) {
-        window.loadURL(`${devServer}#${view}`);
+        const search = new URLSearchParams(query).toString();
+        window.loadURL(`${devServer}${search ? `?${search}` : ''}#${view}`);
     } else {
-        window.loadFile(path.join(here, '..', 'dist', 'index.html'), { hash: view });
+        window.loadFile(path.join(here, '..', 'dist', 'index.html'), { hash: view, query });
     }
 }
 
@@ -102,7 +153,7 @@ function openExternal(url) {
 function attachZoom(window, key) {
     const apply = async (factor) => {
         window.webContents.setZoomFactor(factor);
-        const next = await preferences.set({ [key]: factor });
+        const next = await savePreferences({ [key]: factor });
         BrowserWindow.getAllWindows().forEach((other) => other.webContents.send('preferences:changed', next));
     };
 
@@ -150,45 +201,87 @@ const webPreferences = {
     spellcheck: false,
 };
 
-async function createMainWindow() {
-    const prefs = await preferences.get();
+/**
+ * The main window. It shows straight away, on the theme's own background,
+ * and the page paints its boot screen from the first frame (index.html),
+ * so there is no white flash and no blank wait while the scripts load.
+ * Starting in the tray, it loads hidden and the page polls as usual, so
+ * alerts work before it is ever opened.
+ */
+function createMainWindow({ hidden }) {
     const area = screen.getPrimaryDisplay().workArea;
     const bounds = prefs.windowBounds && screen.getDisplayMatching(prefs.windowBounds) ? prefs.windowBounds : { width: Math.min(1500, area.width - 40), height: Math.min(920, area.height - 40) };
+    const colors = prefs.bootColors;
 
     mainWindow = new BrowserWindow({
         ...bounds,
         minWidth: 1180,
         minHeight: 720,
         show: false,
-        backgroundColor: BACKGROUND,
+        backgroundColor: colors.bg,
         title: brand.name,
-        icon: path.join(here, '..', 'build', 'icon.png'),
+        icon: ICON,
         titleBarStyle: 'hidden',
         titleBarOverlay: { color: '#00000000', symbolColor: '#b8bdd0', height: 34 },
         webPreferences,
     });
 
-    if (prefs.maximized) {
-        mainWindow.maximize();
-    }
-
     lockDown(mainWindow);
     zoomers.zoom = attachZoom(mainWindow, 'zoom');
-    load(mainWindow, 'main');
-    mainWindow.once('ready-to-show', () => mainWindow?.show());
+    load(mainWindow, 'main', { bg: colors.bg, text: colors.text, muted: colors.muted, accent: colors.accent });
+
+    // Maximising shows the window, so a hidden start keeps that for later.
+    if (hidden) {
+        maximizeOnShow = Boolean(prefs.maximized);
+    } else if (prefs.maximized) {
+        mainWindow.maximize();
+    } else {
+        mainWindow.show();
+    }
 
     const remember = () => {
-        if (!mainWindow || mainWindow.isMinimized()) {
+        if (!mainWindow || mainWindow.isMinimized() || !mainWindow.isVisible()) {
             return;
         }
 
-        preferences.set({ maximized: mainWindow.isMaximized(), ...(mainWindow.isMaximized() ? {} : { windowBounds: mainWindow.getBounds() }) });
+        savePreferences({ maximized: mainWindow.isMaximized(), ...(mainWindow.isMaximized() ? {} : { windowBounds: mainWindow.getBounds() }) });
     };
 
     mainWindow.on('resized', remember);
     mainWindow.on('moved', remember);
     mainWindow.on('maximize', remember);
     mainWindow.on('unmaximize', remember);
+    mainWindow.on('blur', () => (lastBlurAt = Date.now()));
+
+    // The X hides the window to the tray (unless switched off, or there is
+    // no tray to come back from). Every other close goes through app.quit,
+    // so quitting is decided in one place (before-quit).
+    mainWindow.on('close', (event) => {
+        if (isQuitting) {
+            return;
+        }
+
+        event.preventDefault();
+
+        if (prefs.closeToTray && tray) {
+            hideToTray();
+        } else {
+            app.quit();
+        }
+    });
+
+    // Minimised to the tray: Windows has already minimised it, so hide it
+    // as well and it leaves the taskbar. showMain restores it.
+    mainWindow.on('minimize', () => {
+        if (prefs.minimizeToTray && tray) {
+            mainWindow?.hide();
+        }
+    });
+
+    // Signing out or shutting down must not be held up by the hide-to-tray close.
+    for (const name of ['query-session-end', 'session-end']) {
+        mainWindow.on(/** @type {any} */ (name), () => (isQuitting = true));
+    }
 
     mainWindow.on('closed', () => {
         mainWindow = null;
@@ -196,8 +289,205 @@ async function createMainWindow() {
     });
 }
 
+/** Bring the main window forward from wherever it is: the tray, minimised or behind other windows. */
+function showMain() {
+    if (!mainWindow) {
+        return;
+    }
+
+    if (maximizeOnShow) {
+        maximizeOnShow = false;
+        mainWindow.maximize();
+    } else if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+    }
+
+    mainWindow.show();
+    mainWindow.focus();
+}
+
+/**
+ * Hide the window to the tray. The first time, a Windows notification says
+ * the app is still running, so closing it never looks like it quit when it
+ * did not.
+ */
+function hideToTray() {
+    mainWindow?.hide();
+
+    if (!prefs.trayNoticeShown) {
+        savePreferences({ trayNoticeShown: true });
+        showNotice(`${brand.name} is still running in the tray`, 'It keeps watching your servers and alerts you when something happens. Click the tray icon to open it again, or right-click it to quit.', showMain);
+    }
+}
+
+/** A Windows notification from the app itself; clicking it runs `onClick`. */
+function showNotice(title, body, onClick) {
+    if (!Notification.isSupported()) {
+        return;
+    }
+
+    notice = new Notification({ title, body, icon: ICON });
+    notice.on('click', onClick);
+    notice.show();
+}
+
+/**
+ * Left-clicking the tray icon: hide the window when it is the one in
+ * front, otherwise bring it forward. Clicking the tray takes focus away
+ * from the window first, so a blur a moment ago still counts as in front.
+ */
+function toggleMain() {
+    if (!mainWindow) {
+        return;
+    }
+
+    const inFront = mainWindow.isVisible() && !mainWindow.isMinimized() && (mainWindow.isFocused() || Date.now() - lastBlurAt < 500);
+
+    if (inFront) {
+        mainWindow.hide();
+    } else {
+        showMain();
+    }
+}
+
+/** The tray menu's status dots, drawn here rather than shipped as files. */
+const dots = {};
+
+/** A soft-edged 16 px dot (drawn at 2×, so it stays round on scaled displays). */
+function dot(hex) {
+    const size = 32;
+    const radius = 7;
+    const [red, green, blue] = [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
+    const pixels = Buffer.alloc(size * size * 4);
+
+    for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+            const alpha = Math.min(1, Math.max(0, radius + 0.5 - Math.hypot(x + 0.5 - size / 2, y + 0.5 - size / 2)));
+            const at = (y * size + x) * 4;
+
+            // Premultiplied BGRA, as Chromium keeps bitmaps on Windows.
+            pixels[at] = Math.round(blue * alpha);
+            pixels[at + 1] = Math.round(green * alpha);
+            pixels[at + 2] = Math.round(red * alpha);
+            pixels[at + 3] = Math.round(255 * alpha);
+        }
+    }
+
+    return nativeImage.createFromBitmap(pixels, { width: size, height: size, scaleFactor: 2 });
+}
+
+/** The notification-area icon: click to show or hide the window, right-click for the menu. */
+function createTray() {
+    let image = nativeImage.createFromPath(TRAY_ICON);
+
+    if (image.isEmpty()) {
+        image = nativeImage.createFromPath(ICON).resize({ width: 16, height: 16, quality: 'best' });
+    }
+
+    Object.assign(dots, { online: dot('#3fb97a'), offline: dot('#ef5a52'), locked: dot('#f0a92e'), unknown: dot('#868ba3') });
+
+    tray = new Tray(image);
+    tray.setToolTip(tooltip(brand.name, traySummary));
+    tray.on('click', toggleMain);
+    tray.on('right-click', () => tray?.popUpContextMenu(trayMenu()));
+}
+
+/** Built on every right-click, so it always shows the latest readings. */
+function trayMenu() {
+    const list = traySummary?.servers ?? [];
+    const miniTarget = [traySummary?.selectedId, prefs.lastServerId, list[0]?.id].find((id) => id && list.some((server) => server.id === id));
+
+    return Menu.buildFromTemplate([
+        { label: `Open ${brand.name}`, click: showMain },
+        { label: 'Mini monitor', enabled: Boolean(miniTarget), click: () => miniTarget && openMini(miniTarget) },
+        { type: 'separator' },
+        { label: statusLine(traySummary), enabled: false },
+        ...list.map((server) => ({ label: serverLabel(server), icon: dots[server.state], click: () => openServer(server.id) })),
+        { type: 'separator' },
+        { label: 'Check licence', click: checkLicenceFromTray },
+        { type: 'separator' },
+        { label: `Quit ${brand.name}`, click: () => app.quit() },
+    ]);
+}
+
+/** Open the window on one server, from the tray menu. */
+function openServer(serverId) {
+    showMain();
+    mainWindow?.webContents.send('tray:open-server', serverId);
+}
+
+/** Check the licence now, and say how it stands in a notification that opens Options → Licence. */
+async function checkLicenceFromTray() {
+    const status = await checkLicence();
+    const until = status.expires ? new Date(status.expires).toLocaleDateString() : null;
+    const body = {
+        licensed: `Licensed${status.licensee ? ` to ${status.licensee}` : ''}${until ? `, until ${until}` : ''}.`,
+        trial: `Free trial: ${status.trialDaysLeft} ${status.trialDaysLeft === 1 ? 'day' : 'days'} left.`,
+        expired: LOCKED[status.reason] ?? LOCKED.trial,
+    }[status.state];
+
+    showNotice('Licence checked', [body, status.onlineError].filter(Boolean).join(' '), () => {
+        showMain();
+        mainWindow?.webContents.send('tray:open-licence');
+    });
+}
+
+/**
+ * Start with Windows, hidden in the tray (--hidden). Packaged builds only:
+ * a development or screenshot run must never register itself with Windows.
+ * The portable build runs from a temporary folder, so it registers the exe
+ * it was started from.
+ */
+function applyLoginItem(enabled) {
+    if (!app.isPackaged || process.env.PANEL_USER_DATA) {
+        return;
+    }
+
+    app.setLoginItemSettings({ openAtLogin: enabled, path: process.env.PORTABLE_EXECUTABLE_FILE ?? process.execPath, args: ['--hidden'] });
+}
+
+/** Run a ban-list sync, counted so quitting can ask first while it runs. */
+async function whileSyncing(run) {
+    banSyncsRunning++;
+
+    try {
+        return await run();
+    } finally {
+        banSyncsRunning--;
+    }
+}
+
+/** Quitting during a ban-list sync: ask, with the window forward to show what is going on. */
+async function askToQuitDuringSync() {
+    if (askingToQuit) {
+        return;
+    }
+
+    askingToQuit = true;
+    showMain();
+
+    const { response } = await dialog.showMessageBox(mainWindow ?? undefined, {
+        type: 'warning',
+        title: brand.name,
+        message: 'A ban-list sync is still running',
+        detail: 'Quitting now stops it part-way, so some servers may get the changes and others not. Let it finish first?',
+        buttons: ['Keep running', 'Quit anyway'],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true,
+    });
+
+    askingToQuit = false;
+
+    if (response === 1) {
+        quitDuringSync = true;
+        app.quit();
+    }
+}
+
 async function openMini(serverId) {
-    const prefs = await preferences.get();
+    // The tray menu opens it too, so the window learns it is open from here.
+    mainWindow?.webContents.send('mini:opened');
 
     if (miniWindow) {
         miniWindow.webContents.send('mini:server', serverId);
@@ -234,7 +524,7 @@ async function openMini(serverId) {
     zoomers.miniZoom = attachZoom(miniWindow, 'miniZoom');
     load(miniWindow, `mini/${serverId}`);
 
-    const remember = () => miniWindow && preferences.set({ miniBounds: miniWindow.getBounds() });
+    const remember = () => miniWindow && savePreferences({ miniBounds: miniWindow.getBounds() });
     miniWindow.on('resized', remember);
     miniWindow.on('moved', remember);
     miniWindow.on('closed', () => {
@@ -359,7 +649,11 @@ function registerIpc() {
             return lock ? lockedAnswer(lock.message, lock.by) : fn(String(id), ...rest);
         });
 
-    handle('servers:list', () => servers.list());
+    handle('servers:list', async () => {
+        await demoReady;
+
+        return servers.list();
+    });
     handle('servers:save', async (input) => {
         const { value, error } = cleanServer(input);
 
@@ -443,7 +737,7 @@ function registerIpc() {
     handle('banlists:plan', (id) => (groupId(id) ? banListPlan(id, lockOf) : { ok: false, error: 'That ban list no longer exists.' }));
     handle('banlists:sync', (id, fingerprint) =>
         groupId(id) && typeof fingerprint === 'string' && /^[0-9a-f]{16}$/.test(fingerprint)
-            ? banListSync(id, fingerprint, lockOf)
+            ? whileSyncing(() => banListSync(id, fingerprint, lockOf))
             : { ok: false, error: 'Check the differences first, then confirm the sync.' },
     );
 
@@ -470,8 +764,31 @@ function registerIpc() {
     handle('activity:list', (id) => activity.list(id ? String(id) : null));
     handle('preferences:get', () => preferences.get());
     handle('preferences:set', async (changes) => {
-        const allowed = ['refreshSeconds', 'confirmActions', 'miniOpacity', 'miniAlwaysOnTop', 'lastServerId', 'theme', 'accent', 'railCollapsed', 'sidebarCollapsed', 'detailCollapsed', 'notifyServerDown', 'notifyWatched', 'watchlist', 'broadcasts'];
-        const next = await preferences.set(Object.fromEntries(Object.entries(changes ?? {}).filter(([key]) => allowed.includes(key))));
+        const allowed = [
+            'refreshSeconds',
+            'confirmActions',
+            'miniOpacity',
+            'miniAlwaysOnTop',
+            'lastServerId',
+            'theme',
+            'accent',
+            'railCollapsed',
+            'sidebarCollapsed',
+            'detailCollapsed',
+            'notifyServerDown',
+            'notifyWatched',
+            'watchlist',
+            'broadcasts',
+            'closeToTray',
+            'minimizeToTray',
+            'startMinimized',
+            'launchAtLogin',
+        ];
+        const next = await savePreferences(Object.fromEntries(Object.entries(changes ?? {}).filter(([key]) => allowed.includes(key))));
+
+        if (changes && 'launchAtLogin' in changes) {
+            applyLoginItem(next.launchAtLogin);
+        }
 
         if (miniWindow) {
             miniWindow.setOpacity(next.miniOpacity);
@@ -488,39 +805,85 @@ function registerIpc() {
 
     handle('mini:open', (id) => openMini(String(id)));
     handle('mini:close', () => miniWindow?.close());
-    handle('main:focus', () => {
-        if (mainWindow) {
-            if (mainWindow.isMinimized()) {
-                mainWindow.restore();
-            }
+    handle('main:focus', () => showMain());
+    handle('external:open', (url) => openExternal(String(url)));
 
-            mainWindow.focus();
+    // The open theme's colours, for the next start's first frame. Written
+    // only when they change, and not announced: nothing else reads them.
+    handle('boot:colors', async (input) => {
+        const colors = cleanBootColors(input);
+
+        if (JSON.stringify(colors) !== JSON.stringify(prefs.bootColors)) {
+            await savePreferences({ bootColors: colors });
+            mainWindow?.setBackgroundColor(colors.bg);
         }
     });
-    handle('external:open', (url) => openExternal(String(url)));
+
+    // The main window's summary of its servers, for the tray icon.
+    ipcMain.on('tray:summary', (event, input) => {
+        if (event.sender !== mainWindow?.webContents) {
+            return;
+        }
+
+        traySummary = cleanSummary(input);
+        tray?.setToolTip(tooltip(brand.name, traySummary));
+    });
 }
 
 if (!app.requestSingleInstanceLock()) {
     app.quit();
 } else {
-    app.on('second-instance', () => {
-        if (mainWindow) {
-            if (mainWindow.isMinimized()) {
-                mainWindow.restore();
-            }
+    // Starting the app again (say from the Start menu while it sits in the tray) shows the window.
+    app.on('second-instance', () => showMain());
 
-            mainWindow.focus();
+    // Quitting for real: from the tray menu, the window's X with close-to-tray
+    // off, or anything else that calls app.quit. While a ban-list sync runs
+    // it asks first.
+    app.on('before-quit', (event) => {
+        if (banSyncsRunning > 0 && !quitDuringSync) {
+            event.preventDefault();
+            askToQuitDuringSync();
+
+            return;
         }
+
+        isQuitting = true;
     });
 
+    app.on('will-quit', () => tray?.destroy());
+
     app.whenReady().then(async () => {
+        prefs = await preferences.get();
         registerIpc();
 
+        // The demo server starts alongside the window rather than before it;
+        // listing servers waits for it (see servers:list).
         if ((await servers.list()).some((server) => server.demo)) {
-            await startDemo();
+            demoReady = startDemo().then(
+                () => undefined,
+                (error) => console.error('[demo] could not start:', error),
+            );
         }
 
-        await createMainWindow();
+        try {
+            createTray();
+        } catch (error) {
+            console.error('[tray] could not be created:', error);
+        }
+
+        // Started by Windows at sign-in (--hidden), or set to start in the
+        // tray. Never without a tray to open it from, nor while screenshots
+        // or the click test drive the window.
+        const automated = process.env.PANEL_SCREENSHOTS || process.env.PANEL_CLICKTEST || process.env.PANEL_TRAYTEST;
+        const hidden = Boolean(tray) && !automated && (process.argv.includes('--hidden') || prefs.startMinimized);
+
+        createMainWindow({ hidden });
+        await demoReady;
+
+        // Keep the sign-in entry pointing at this copy of the app (it may have moved or updated).
+        if (prefs.launchAtLogin) {
+            applyLoginItem(true);
+        }
 
         // Check the licence with the website now and every 12 hours.
         checkLicence();
@@ -529,6 +892,11 @@ if (!app.requestSingleInstanceLock()) {
         if (process.env.PANEL_CLICKTEST) {
             const { clickTest } = await import('../scripts/capture.mjs');
             await clickTest({ app, mainWindow, file: process.env.PANEL_CLICKTEST });
+        }
+
+        if (process.env.PANEL_TRAYTEST) {
+            const { trayTest } = await import('../scripts/capture.mjs');
+            await trayTest({ mainWindow, tray, trayMenu, file: process.env.PANEL_TRAYTEST });
         }
 
         if (process.env.PANEL_SCREENSHOTS) {

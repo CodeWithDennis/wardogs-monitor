@@ -3,10 +3,11 @@ import { ArrowRight, Ellipsis, Lock, Pencil, PictureInPicture2, Trash2, WifiOff 
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import FactionScores from '@/components/FactionScores.vue';
 import MapArt from '@/components/MapArt.vue';
-import { ago, formatUptime, modeName, percent } from '@/lib/format';
+import TimeAgo from '@/components/TimeAgo.vue';
+import { formatUptime, modeName, percent } from '@/lib/format';
 import { BILLING_URL, openBilling } from '@/lib/licence';
 import { mapName } from '@/lib/maps';
-import { now, removeServer, selectServer, state } from '@/lib/store';
+import { removeServer, selectServer, state } from '@/lib/store';
 import type { SavedServer } from '@/types';
 
 /**
@@ -100,7 +101,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onDocument));
                         ><strong>{{ status.players }}</strong> / {{ status.maxPlayers }}</span
                     >
                 </div>
-                <div class="progress"><span :style="{ width: `${fill}%` }" /></div>
+                <div class="progress"><span :style="{ '--fill': fill / 100 }" /></div>
 
                 <FactionScores :factions="status.factions" compact class="scores" />
             </template>
@@ -122,7 +123,10 @@ onUnmounted(() => document.removeEventListener('mousedown', onDocument));
 
         <footer class="foot">
             <span class="mono muted truncate">{{ server.host }}:{{ server.port }}</span>
-            <span class="muted">{{ live ? `checked ${ago(live.checkedAt, now)}` : '' }}</span>
+            <span v-if="live" class="muted checked">
+                <span v-if="state.loading[server.id]" class="updating slow-show"><span class="dot pending" /> updating</span>
+                <template v-else>checked <TimeAgo :at="live.checkedAt" /></template>
+            </span>
         </footer>
     </article>
 </template>
@@ -331,6 +335,22 @@ onUnmounted(() => document.removeEventListener('mousedown', onDocument));
 
 .foot .mono {
     font-size: 12.5px;
+}
+
+.checked {
+    flex: none;
+    white-space: nowrap;
+}
+
+.updating {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.updating .dot {
+    width: 6px;
+    height: 6px;
 }
 
 .pop-enter-active,

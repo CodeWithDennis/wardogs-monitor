@@ -15,6 +15,9 @@ export const DEFAULT_BROADCASTS = [
 /** Zoom steps, like a browser's. */
 export const ZOOM_STEPS = [0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2];
 
+/** Midnight with gold: the boot screen's colours before any theme was seen. */
+export const DEFAULT_BOOT_COLORS = { bg: '#0e1222', text: '#ebe6d8', muted: '#868ba3', accent: '#e8b54e' };
+
 export const DEFAULT_PREFERENCES = {
     refreshSeconds: 5,
     confirmActions: true,
@@ -34,7 +37,30 @@ export const DEFAULT_PREFERENCES = {
     /** Players to keep an eye on: { steamId, name, note, addedAt }. */
     watchlist: [],
     broadcasts: DEFAULT_BROADCASTS,
+    /** The window's close button hides it to the tray; the app keeps watching. */
+    closeToTray: true,
+    /** Minimising hides the window to the tray instead of the taskbar. */
+    minimizeToTray: false,
+    /** Open hidden in the tray instead of showing the window. */
+    startMinimized: false,
+    /** Start with Windows, hidden in the tray. */
+    launchAtLogin: false,
+    /** Whether the one-off "still running in the tray" notice was shown. */
+    trayNoticeShown: false,
+    /**
+     * The open theme's colours, remembered so the next start paints the
+     * window and boot screen in them from the first frame: the theme itself
+     * only reaches the page once its scripts have run.
+     */
+    bootColors: DEFAULT_BOOT_COLORS,
 };
+
+const HEX = /^#[0-9a-f]{6}$/i;
+
+/** Boot colours kept to their shape: each a #rrggbb colour, or the default. */
+export function cleanBootColors(value) {
+    return Object.fromEntries(Object.entries(DEFAULT_BOOT_COLORS).map(([key, fallback]) => [key, HEX.test(String(value?.[key] ?? '')) ? String(value[key]).toLowerCase() : fallback]));
+}
 
 const text = (value, max) => String(value ?? '').trim().slice(0, max);
 const nearestZoom = (value) => ZOOM_STEPS.reduce((best, step) => (Math.abs(step - value) < Math.abs(best - value) ? step : best), 1);
@@ -82,6 +108,12 @@ export function resolve(raw) {
     next.broadcasts = (Array.isArray(next.broadcasts) ? next.broadcasts : DEFAULT_BROADCASTS).map((entry) => text(entry, 200)).filter(Boolean).slice(0, 30);
     next.zoom = nearestZoom(Number(next.zoom) || 1);
     next.miniZoom = nearestZoom(Number(next.miniZoom) || 1);
+
+    for (const key of ['closeToTray', 'minimizeToTray', 'startMinimized', 'launchAtLogin', 'trayNoticeShown']) {
+        next[key] = typeof next[key] === 'boolean' ? next[key] : DEFAULT_PREFERENCES[key];
+    }
+
+    next.bootColors = cleanBootColors(next.bootColors);
 
     return next;
 }

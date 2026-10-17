@@ -161,4 +161,38 @@ const tab = defineModel<string>('tab');
     gap: 11px;
     padding-bottom: 6.5px;
 }
+
+.text {
+    min-width: 0;
+}
+
+.title {
+    overflow-wrap: anywhere;
+}
+
+/* A narrow page: less padding, a smaller title, and the actions wrap under it rather than squeeze it. */
+@container page (max-width: 760px) {
+    .view-header {
+        padding: 24px 20px 0;
+    }
+
+    .heading {
+        flex-wrap: wrap;
+        gap: 13px 20px;
+        min-height: 0;
+        padding-right: max(0px, calc(var(--caption-clear, var(--caption-w)) - 20px));
+    }
+
+    .title {
+        font-size: 23px;
+    }
+
+    .actions {
+        flex-wrap: wrap;
+    }
+
+    .bar {
+        margin-top: 13px;
+    }
+}
 </style>

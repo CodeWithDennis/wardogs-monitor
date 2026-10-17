@@ -169,6 +169,31 @@ const SHORTCUTS = [
 
             <div class="group">
                 <div class="group-text">
+                    <h3>Background</h3>
+                    <p class="muted">Keep watching your servers from the tray by the clock, with the window out of the way. Right-click the tray icon to quit.</p>
+                </div>
+                <div class="stack">
+                    <label class="switch">
+                        <button type="button" role="switch" class="toggle" :aria-checked="state.preferences.closeToTray" @click="set({ closeToTray: !state.preferences.closeToTray })" />
+                        <span>Closing the window keeps the app running in the tray</span>
+                    </label>
+                    <label class="switch">
+                        <button type="button" role="switch" class="toggle" :aria-checked="state.preferences.minimizeToTray" @click="set({ minimizeToTray: !state.preferences.minimizeToTray })" />
+                        <span>Minimise to the tray instead of the taskbar</span>
+                    </label>
+                    <label class="switch">
+                        <button type="button" role="switch" class="toggle" :aria-checked="state.preferences.startMinimized" @click="set({ startMinimized: !state.preferences.startMinimized })" />
+                        <span>Start hidden in the tray</span>
+                    </label>
+                    <label class="switch">
+                        <button type="button" role="switch" class="toggle" :aria-checked="state.preferences.launchAtLogin" @click="set({ launchAtLogin: !state.preferences.launchAtLogin })" />
+                        <span>Start with Windows, hidden in the tray</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="group">
+                <div class="group-text">
                     <h3>Mini monitor</h3>
                     <p class="muted">The small live window you can keep over the game.</p>
                 </div>
@@ -780,5 +805,46 @@ const SHORTCUTS = [
 .kbd {
     padding: 0 6.5px;
     color: var(--text-2);
+}
+
+/* A narrow page: explanations sit above their settings, and server rows wrap their buttons below. */
+@container page (max-width: 720px) {
+    .group {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 13px;
+    }
+
+    .themes {
+        grid-template-columns: repeat(auto-fill, minmax(min(253px, 100%), 1fr));
+    }
+
+    .server {
+        flex-wrap: wrap;
+        gap: 13px 17.5px;
+    }
+
+    .server-text {
+        flex-basis: calc(100% - 140px);
+    }
+
+    .server-actions {
+        flex-wrap: wrap;
+        margin-left: auto;
+    }
+
+    .shortcut {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 6.5px;
+    }
+}
+
+@container page (max-width: 480px) {
+    .server-art {
+        display: none;
+    }
+
+    .server-text {
+        flex-basis: 100%;
+    }
 }
 </style>

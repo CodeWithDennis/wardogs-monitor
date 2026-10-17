@@ -16,7 +16,10 @@ import path from 'node:path';
  *
  * Each instance keeps its own bans, so two of them on different ports make
  * two servers with different ban lists (for linked ban lists). `bans`
- * replaces the one ban every instance starts with.
+ * replaces the one ban every instance starts with. `players` sets how many
+ * players it starts with (46 by default, up to its 100 slots), to try the
+ * app with a full server; `latencyMs` makes every answer that much slower,
+ * to see the loading states.
  */
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -49,7 +52,7 @@ const pick = (list) => list[Math.floor(Math.random() * list.length)];
 const between = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
 
 /**
- * @param {{ port?: number, password?: string, quiet?: boolean, bans?: { steamId: string, reason?: string | null, bannedAtUtc?: string }[] }} [options]
+ * @param {{ port?: number, password?: string, quiet?: boolean, players?: number, latencyMs?: number, bans?: { steamId: string, reason?: string | null, bannedAtUtc?: string }[] }} [options]
  * @returns {Promise<{ port: number, password: string, close: () => Promise<void> }>}
  */
 export async function startMockServer(options = {}) {
@@ -81,7 +84,9 @@ export async function startMockServer(options = {}) {
 
     function addPlayer() {
         const taken = new Set(state.players.map((player) => player.name));
-        const free = NAMES.filter((name) => !taken.has(name));
+        const firstRound = NAMES.filter((name) => !taken.has(name));
+        // A full server runs out of names: the second round gets a number, like "Nomad 2".
+        const free = firstRound.length > 0 ? firstRound : NAMES.map((name) => `${name} 2`).filter((name) => !taken.has(name));
 
         if (free.length === 0 || state.players.length >= maxPlayers()) {
             return;
@@ -100,7 +105,7 @@ export async function startMockServer(options = {}) {
         state.players.push({ name: pick(free), steamId, faction, kills: 0, deaths: 0, cash: between(500, 4000), pingMs: between(18, 110) });
     }
 
-    for (let i = 0; i < 46; i++) {
+    for (let i = 0; i < (options.players ?? 46); i++) {
         addPlayer();
     }
 
@@ -196,8 +201,16 @@ export async function startMockServer(options = {}) {
     timer.unref();
 
     const json = (response, status, body) => {
-        response.writeHead(status, { 'Content-Type': 'application/json' });
-        response.end(JSON.stringify(body));
+        const send = () => {
+            response.writeHead(status, { 'Content-Type': 'application/json' });
+            response.end(JSON.stringify(body));
+        };
+
+        if (options.latencyMs) {
+            setTimeout(send, options.latencyMs);
+        } else {
+            send();
+        }
     };
 
     const routes = [

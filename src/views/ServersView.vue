@@ -5,11 +5,11 @@ import ServerCard from '@/components/ServerCard.vue';
 import SearchField from '@/components/SearchField.vue';
 import ViewHeader from '@/components/ViewHeader.vue';
 import { planLimit, realServerCount } from '@/lib/licence';
-import { loadServers, selectServer, state, toast } from '@/lib/store';
+import { loadServers, searchTerm, selectServer, state, toast } from '@/lib/store';
 
 /** Every saved server as a card, filtered by the sidebar's status and search. */
 const servers = computed(() => {
-    const term = state.search.trim().toLowerCase();
+    const term = searchTerm.value;
 
     return state.servers.filter((server) => {
         const live = state.lives[server.id];
@@ -67,7 +67,7 @@ async function addDemo(): Promise<void> {
 <style scoped>
 .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(330px, 100%), 1fr));
     gap: 20px;
 }
 
