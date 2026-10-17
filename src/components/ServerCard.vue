@@ -131,17 +131,12 @@ onUnmounted(() => document.removeEventListener('mousedown', onDocument));
     overflow: visible;
     background: var(--panel);
     cursor: pointer;
-    transition:
-        border-color 0.15s,
-        transform 0.15s,
-        box-shadow 0.15s;
+    transition: border-color 0.15s;
     animation: rise 0.2s ease both;
 }
 
 .server-card:hover {
     border-color: var(--line-strong);
-    transform: translateY(-2px);
-    box-shadow: 0 15.5px 37.5px rgb(0 0 0 / 0.35);
 }
 
 .server-card.selected {

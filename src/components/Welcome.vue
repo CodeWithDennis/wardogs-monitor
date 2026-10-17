@@ -61,9 +61,10 @@ async function addDemo(): Promise<void> {
 .wordmark {
     margin: 0;
     font-family: var(--font-title);
-    font-size: 46px;
+    /* Bigger for the condensed fonts, which read smaller at the same size. */
+    font-size: calc(46px * var(--title-scale));
     font-weight: 800;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.08em;
     line-height: 1;
     text-transform: uppercase;
 }
