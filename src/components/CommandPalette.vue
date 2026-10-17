@@ -2,7 +2,8 @@
 import { Ban, Gauge, LayoutGrid, Map as MapIcon, Megaphone, Palette, PictureInPicture2, Plus, Repeat, RotateCcw, ScrollText, Search, Server, Settings2, SkipForward, SlidersHorizontal, Star, UserMinus, Users } from 'lucide-vue-next';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import TimeAgo from '@/components/TimeAgo.vue';
-import { act, openMini, openOptions, openView, selectServer, selectedServer, state, type View } from '@/lib/store';
+import { act, openOptions, openView, selectServer, selectedServer, state, type View } from '@/lib/store';
+import { openWidget, pickWidgets, WIDGETS } from '@/lib/widgets';
 import { isWatched } from '@/lib/watchlist';
 
 /**
@@ -146,7 +147,8 @@ const actions = computed<Item[]>(() => {
                 keywords: 'end match next map skip',
                 run: () => act('endMatch', {}, { confirm: { title: 'End the match now?', body: 'The rotation moves on to the next map.', confirmLabel: 'End match', danger: true } }),
             },
-            { id: 'mini', group: 'Actions', label: 'Open the mini monitor', icon: PictureInPicture2, keywords: 'mini monitor overlay window', run: () => openMini() },
+            ...WIDGETS.map((widget) => ({ id: `widget-${widget.kind}`, group: 'Widgets', label: `Open the ${widget.label.toLowerCase()} widget for ${name}`, icon: widget.icon, keywords: 'widget mini monitor overlay window', run: () => openWidget(widget.kind) })),
+            { id: 'widgets', group: 'Widgets', label: 'Choose widgets…', icon: PictureInPicture2, keywords: 'widgets mini monitor overlay window', run: () => pickWidgets() },
         );
     }
 

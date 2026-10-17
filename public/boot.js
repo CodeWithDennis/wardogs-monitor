@@ -3,14 +3,14 @@
  * done before the first frame). Main passes the open theme's colours in the
  * address (?bg=…&text=…&muted=…&accent=…), and this paints the boot screen
  * in index.html with them, so a non-default theme never flashes Midnight
- * first. The mini monitor's window has no boot screen. Kept tiny and free
+ * first. Widget windows have no boot screen. Kept tiny and free
  * of imports so it costs nothing.
  */
 (() => {
     const root = document.documentElement;
 
-    if (location.hash.startsWith('#mini/')) {
-        root.classList.add('mini-window');
+    if (location.hash.startsWith('#widget/')) {
+        root.classList.add('widget-window');
 
         return;
     }
