@@ -20,8 +20,8 @@ import { createPrivateKey, createPublicKey, randomUUID, sign, verify } from 'nod
 
 const DAY = 86_400_000;
 
-/** How many real servers the free trial runs. */
-export const TRIAL_SERVERS = 10;
+/** How many real servers the free trial runs: as many as the paid plan, which is unlimited. */
+export const TRIAL_SERVERS = null;
 
 /** @param {string} pem */
 export function keyFromPem(pem, kind) {
