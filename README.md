@@ -47,7 +47,7 @@
 - **Mini monitor**: a small always-on-top window with the map, score race and player count, to keep over the game.
 - **Activity log**: every action taken from the app, per server, with failures.
 - **Themes**: 24 themes (Midnight by default, plus Carbon, Graphite, Blackout, Nord, Dracula, Gruvbox, Tokyo Night and more) and four accent colours. Zoom with Ctrl + / Ctrl − / Ctrl 0 or Ctrl + mouse wheel.
-- **Layout**: the sidebar folds to icons (Ctrl+B), the rail switches to icons only, and the right-hand details fold to a thin strip (Ctrl+J). On narrow windows (from 900×600) both fold on their own and come back when the window widens; pages adapt to the space they get. Click a players column header to sort by it.
+- **Layout**: the sidebar folds to icons (Ctrl+B) and the rail switches to icons only; the right-hand details always stay in view. The window keeps a minimum size (1100×640 at 100% zoom, more when zoomed in) so everything fits; below 1180 wide the sidebar folds on its own and comes back when the window widens. Pages adapt to the space they get. Click a players column header to sort by it.
 - **Demo server**: a pretend server that plays a match on its own, so every control can be tried safely.
 
 ## Screenshots
@@ -92,7 +92,6 @@ The app checks that the server answers with that password before saving it.
 | Ctrl+K | Search everything |
 | Ctrl+H | All servers as cards |
 | Ctrl+B | Fold the sidebar to icons (the rail's « button does the same for the rail) |
-| Ctrl+J | Fold the right-hand details to a thin strip |
 | Ctrl+1 … Ctrl+6 | Overview, Players, Match, Rotation, Bans, Settings |
 | Ctrl+F | Jump to the page's search box |
 | F5 or Ctrl+R | Read the server again now |

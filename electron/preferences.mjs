@@ -30,8 +30,6 @@ export const DEFAULT_PREFERENCES = {
     miniZoom: 1,
     railCollapsed: false,
     sidebarCollapsed: false,
-    /** The right-hand detail panel folded to a thin strip. */
-    detailCollapsed: false,
     notifyServerDown: true,
     notifyWatched: true,
     /** Players to keep an eye on: { steamId, name, note, addedAt }. */

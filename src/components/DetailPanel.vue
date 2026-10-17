@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Copy, ExternalLink, Star, Megaphone, MessageSquare, PanelRightClose, PanelRightOpen, PictureInPicture2, RefreshCw, Shuffle, Skull, UserX, Ban as BanIcon, X } from 'lucide-vue-next';
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { Copy, ExternalLink, Star, Megaphone, MessageSquare, PictureInPicture2, RefreshCw, Shuffle, Skull, UserX, Ban as BanIcon, X } from 'lucide-vue-next';
+import { computed, ref, watch } from 'vue';
 import MapArt from '@/components/MapArt.vue';
 import TimeAgo from '@/components/TimeAgo.vue';
 import { dateTime, formatUptime, gameName, modeName, modifierNames, number, percent, pingLevel, ratio, steamProfileUrl, zoneName } from '@/lib/format';
@@ -8,7 +8,7 @@ import { mapName } from '@/lib/maps';
 import { killPlayer, openPlayerAction } from '@/lib/playerActions';
 import { liftBan } from '@/lib/banlists';
 import { isWatched, setWatchNote, toggleWatch, watchedEntry } from '@/lib/watchlist';
-import { detailFolded, openMini, openView, refreshLive, selectedLive, selectedServer, state, toast, togglePanel } from '@/lib/store';
+import { openMini, openView, refreshLive, selectedLive, selectedServer, state, toast } from '@/lib/store';
 import type { Ban } from '@/types';
 
 /**
@@ -67,67 +67,6 @@ function copy(text: string, what: string): void {
     toast('info', `Copied the ${what}`);
 }
 
-/**
- * Folding the panel (Ctrl+J) leaves a thin strip with the live signals.
- * Opening a player or ban while it is folded peeks it open for that
- * selection only: the saved choice stays folded, and the panel folds back
- * when the selection is cleared.
- */
-const peek = ref(false);
-const collapsed = computed(() => detailFolded.value && !peek.value);
-const selection = computed(() => (player.value ? `player:${player.value.steamId}` : ban.value ? `ban:${ban.value.steamId}` : null));
-
-watch(selection, (current) => {
-    peek.value = current !== null && detailFolded.value;
-});
-
-watch(
-    () => detailFolded.value,
-    () => {
-        peek.value = false;
-    },
-);
-
-const dot = computed(() => (live.value === undefined ? 'pending' : live.value.online ? 'online' : 'offline'));
-const stripTitle = computed(() => (status.value ? `${status.value.players} of ${status.value.maxPlayers} players · ${mapName(status.value.map)}` : (selectedServer.value?.name ?? 'Server')));
-
-function expand(): void {
-    if (detailFolded.value) {
-        togglePanel('detailCollapsed');
-    }
-}
-
-/** A peek only folds back; otherwise folding is remembered. */
-function collapse(): void {
-    if (peek.value) {
-        peek.value = false;
-    } else if (!detailFolded.value) {
-        togglePanel('detailCollapsed');
-    }
-}
-
-/** Ctrl+J, from anywhere in the page, but not while a dialog is open. */
-function onKey(event: KeyboardEvent): void {
-    if (!event.ctrlKey || event.altKey || event.shiftKey || event.metaKey || event.key.toLowerCase() !== 'j' || document.querySelector('[role="dialog"]')) {
-        return;
-    }
-
-    event.preventDefault();
-
-    if (event.repeat) {
-        return;
-    }
-
-    if (collapsed.value) {
-        expand();
-    } else {
-        collapse();
-    }
-}
-
-onMounted(() => window.addEventListener('keydown', onKey));
-onUnmounted(() => window.removeEventListener('keydown', onKey));
-
 function broadcast(): void {
     openView('overview');
     requestAnimationFrame(() => document.getElementById('broadcast')?.focus());
@@ -144,22 +83,8 @@ function unban(entry: Ban): void {
 </script>
 
 <template>
-    <aside class="detail" :class="{ collapsed }">
-        <!-- Folded: a thin strip with the live signals -->
-        <div v-if="collapsed" class="strip" :title="stripTitle" @click="expand">
-            <div class="strip-top drag" />
-            <button type="button" class="icon-btn" title="Show details (Ctrl+J)" @click.stop="expand"><PanelRightOpen /></button>
-            <span class="strip-rule" />
-            <span class="dot" :class="dot" />
-            <span v-if="live?.online && status" class="strip-count num">
-                <strong>{{ status.players }}</strong>
-                <span>/{{ status.maxPlayers }}</span>
-            </span>
-            <span v-else class="strip-count num"><strong>–</strong></span>
-            <MapArt v-if="status" :map="status.map" :lighting="status.lighting" variant="square" :fade="false" class="strip-map" />
-        </div>
-
-        <div v-else class="full">
+    <aside class="detail">
+        <div class="full">
             <!-- A player -->
             <template v-if="player">
                 <div class="hero player-hero" :style="{ '--faction': player.factionColor ?? 'var(--accent)' }">
@@ -168,7 +93,6 @@ function unban(entry: Ban): void {
                         <button type="button" class="icon-btn" :class="{ starred: isWatched(player.steamId) }" :title="isWatched(player.steamId) ? 'Stop watching' : 'Watch this player'" @click="toggleWatch(player)"><Star /></button>
                         <button type="button" class="icon-btn" title="Steam profile" @click="openUrl(steamProfileUrl(player.steamId))"><ExternalLink /></button>
                         <button type="button" class="icon-btn" title="Close" @click="state.selectedPlayer = null"><X /></button>
-                        <button type="button" class="icon-btn" title="Hide details (Ctrl+J)" @click="collapse"><PanelRightClose /></button>
                     </div>
                     <h2 class="title hero-title">{{ player.name }}</h2>
                 </div>
@@ -222,7 +146,6 @@ function unban(entry: Ban): void {
                     <div class="hero-buttons drag">
                         <button type="button" class="icon-btn" title="Steam profile" @click="openUrl(steamProfileUrl(ban.steamId))"><ExternalLink /></button>
                         <button type="button" class="icon-btn" title="Close" @click="state.selectedBan = null"><X /></button>
-                        <button type="button" class="icon-btn" title="Hide details (Ctrl+J)" @click="collapse"><PanelRightClose /></button>
                     </div>
                     <h2 class="title hero-title">Banned player</h2>
                 </div>
@@ -253,7 +176,6 @@ function unban(entry: Ban): void {
                     <div class="hero-buttons drag">
                         <button type="button" class="icon-btn" title="Mini monitor" @click="openMini"><PictureInPicture2 /></button>
                         <button type="button" class="icon-btn" :class="{ spinning: state.loading[state.selectedId ?? ''] }" title="Refresh (F5)" @click="state.selectedId && refreshLive(state.selectedId, true)"><RefreshCw /></button>
-                        <button type="button" class="icon-btn" title="Hide details (Ctrl+J)" @click="collapse"><PanelRightClose /></button>
                     </div>
                     <h2 class="title hero-title">{{ status ? mapName(status.map) : selectedServer?.name }}</h2>
                 </div>
@@ -316,101 +238,19 @@ function unban(entry: Ban): void {
 </template>
 
 <style scoped>
-/*
- * The width animates between full and the folded strip. The full layer
- * keeps its own width and hugs the right edge, so it slides in and out
- * instead of squeezing its text.
- */
 .detail {
     position: relative;
     width: var(--detail-w);
     flex: none;
     overflow: hidden;
     background: var(--panel);
-    transition: width 0.22s cubic-bezier(0.2, 0, 0, 1);
-}
-
-.detail.collapsed {
-    width: 52px;
 }
 
 .full {
     position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: var(--detail-w);
-    display: flex;
-    flex-direction: column;
-}
-
-.strip {
-    position: absolute;
     inset: 0;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 13px;
-    padding: calc(var(--caption-h) + 16.5px) 0 20px;
-    cursor: pointer;
-    transition: background 0.12s;
-    animation: strip-in 0.22s ease;
-}
-
-.strip:hover {
-    background: color-mix(in srgb, var(--hover) 50%, transparent);
-}
-
-.strip-top {
-    position: absolute;
-    top: 0;
-    right: 0;
-    left: 0;
-    height: calc(var(--caption-h) + 12px);
-}
-
-.strip-rule {
-    width: 22px;
-    height: 1px;
-    margin: 2px 0;
-    background: var(--line-soft);
-}
-
-.strip .dot {
-    margin-top: 2px;
-}
-
-.strip-count {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    line-height: 1.15;
-}
-
-.strip-count strong {
-    color: var(--text);
-    font-family: var(--font-title);
-    font-size: 15.5px;
-    font-weight: 700;
-}
-
-.strip-count span {
-    color: var(--muted);
-    font-size: 11px;
-}
-
-.strip-map {
-    flex: none;
-    width: 33px;
-    height: 33px;
-    border-radius: var(--radius);
-    box-shadow: inset 0 0 0 1px var(--line);
-}
-
-@keyframes strip-in {
-    from {
-        opacity: 0;
-    }
 }
 
 .hero {
