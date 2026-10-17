@@ -76,7 +76,6 @@ export const state = reactive({
         miniZoom: 1,
         railCollapsed: false,
         sidebarCollapsed: false,
-        detailCollapsed: false,
         notifyServerDown: true,
         notifyWatched: true,
         watchlist: [],
@@ -377,27 +376,22 @@ export function selectServer(serverId: string, open = true): void {
 }
 
 /**
- * Below these window widths (in CSS pixels, so zoom counts), the sidebar
- * folds to icons and the details fold to a strip on their own, so the page
- * keeps room to breathe. The saved choice is left alone: widen the window
- * and the panels come back as they were.
+ * Below this window width (in CSS pixels, so zoom counts), the sidebar
+ * folds to icons on its own, so the page keeps room to breathe. The saved
+ * choice is left alone: widen the window and it comes back as it was.
  */
 export const SIDEBAR_FOLDS_BELOW = 1180;
-export const DETAIL_FOLDS_BELOW = 1400;
 
-/** The window's width, and panels opened by hand while the window is narrow. */
+/** The window's width, and whether the sidebar was opened by hand while the window is narrow. */
 export const layout = reactive({
     width: typeof window === 'undefined' ? 1920 : window.innerWidth,
-    unfolded: { sidebar: false, detail: false },
+    unfolded: false,
 });
 
-const narrowFor = (panel: 'sidebar' | 'detail') => layout.width < (panel === 'sidebar' ? SIDEBAR_FOLDS_BELOW : DETAIL_FOLDS_BELOW);
+const narrow = () => layout.width < SIDEBAR_FOLDS_BELOW;
 
 /** Whether the sidebar shows as icons: chosen by the person, or a narrow window. */
-export const sidebarFolded = computed(() => state.preferences.sidebarCollapsed || (narrowFor('sidebar') && !layout.unfolded.sidebar));
-
-/** Whether the details show as a strip: chosen by the person, or a narrow window. */
-export const detailFolded = computed(() => state.preferences.detailCollapsed || (narrowFor('detail') && !layout.unfolded.detail));
+export const sidebarFolded = computed(() => state.preferences.sidebarCollapsed || (narrow() && !layout.unfolded));
 
 if (typeof window !== 'undefined') {
     let frame = 0;
@@ -405,40 +399,33 @@ if (typeof window !== 'undefined') {
     window.addEventListener('resize', () => {
         cancelAnimationFrame(frame);
         frame = requestAnimationFrame(() => {
-            const wasNarrow = { sidebar: narrowFor('sidebar'), detail: narrowFor('detail') };
+            const wasNarrow = narrow();
             layout.width = window.innerWidth;
 
-            // Crossing a threshold forgets a panel opened by hand, so the automatic fold applies again.
-            for (const panel of ['sidebar', 'detail'] as const) {
-                if (wasNarrow[panel] !== narrowFor(panel)) {
-                    layout.unfolded[panel] = false;
-                }
+            // Crossing the threshold forgets a sidebar opened by hand, so the automatic fold applies again.
+            if (wasNarrow !== narrow()) {
+                layout.unfolded = false;
             }
         });
     });
 }
 
 /**
- * Show or hide the sidebar (Ctrl+B), the details (Ctrl+J) or the rail's
- * labels; remembered. While the window is too narrow, opening a folded panel
- * opens it for now and folding it again closes it, without changing the
- * saved choice.
+ * Show or hide the sidebar (Ctrl+B) or the rail's labels; remembered. While
+ * the window is too narrow, opening the folded sidebar opens it for now and
+ * folding it again closes it, without changing the saved choice.
  */
-export async function togglePanel(which: 'railCollapsed' | 'sidebarCollapsed' | 'detailCollapsed'): Promise<void> {
-    const panel = which === 'sidebarCollapsed' ? 'sidebar' : which === 'detailCollapsed' ? 'detail' : null;
-
-    if (panel && narrowFor(panel)) {
-        const folded = panel === 'sidebar' ? sidebarFolded.value : detailFolded.value;
-
-        if (!folded) {
-            layout.unfolded[panel] = false;
+export async function togglePanel(which: 'railCollapsed' | 'sidebarCollapsed'): Promise<void> {
+    if (which === 'sidebarCollapsed' && narrow()) {
+        if (!sidebarFolded.value) {
+            layout.unfolded = false;
 
             return;
         }
 
-        layout.unfolded[panel] = true;
+        layout.unfolded = true;
 
-        if (!state.preferences[which]) {
+        if (!state.preferences.sidebarCollapsed) {
             return;
         }
     }
