@@ -14,7 +14,12 @@ export async function captureViews({ app, mainWindow, openMini, getMini, dir }) 
     web.on('console-message', (_event, level, message) => level >= 2 && console.log('[page]', message));
     const run = (code) => web.executeJavaScript(code);
     const shot = async (name, window = mainWindow) => {
-        const image = await window.webContents.capturePage();
+        // Capturing can fail now and then while the GPU is busy; one retry is enough.
+        const image = await window.webContents.capturePage().catch(async () => {
+            await wait(800);
+
+            return window.webContents.capturePage();
+        });
         await writeFile(path.join(dir, `${name}.png`), image.toPNG());
         console.log(`[capture] ${name}`);
     };

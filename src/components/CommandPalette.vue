@@ -320,7 +320,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
     padding: 11px 11px 5.5px;
     color: var(--faint);
     font-family: var(--font-title);
-    font-size: 11.5px;
+    font-size: calc(11.5px * var(--title-scale, 1));
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;

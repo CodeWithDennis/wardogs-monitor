@@ -105,7 +105,7 @@ async function addDemo(): Promise<void> {
 
 .add-card strong {
     font-family: var(--font-title);
-    font-size: 15.5px;
+    font-size: calc(15.5px * var(--title-scale, 1));
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;

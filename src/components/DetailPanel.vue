@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { Copy, ExternalLink, Star, Megaphone, MessageSquare, PictureInPicture2, RefreshCw, Shuffle, Skull, UserX, Ban as BanIcon, X } from 'lucide-vue-next';
-import { computed, ref, watch } from 'vue';
+import { Copy, ExternalLink, Star, Megaphone, MessageSquare, PanelRightClose, PanelRightOpen, PictureInPicture2, RefreshCw, Shuffle, Skull, UserX, Ban as BanIcon, X } from 'lucide-vue-next';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import MapArt from '@/components/MapArt.vue';
 import { ago, dateTime, formatUptime, gameName, modeName, modifierNames, number, percent, pingLevel, ratio, steamProfileUrl, zoneName } from '@/lib/format';
 import { mapName } from '@/lib/maps';
 import { killPlayer, openPlayerAction } from '@/lib/playerActions';
 import { isWatched, setWatchNote, toggleWatch, watchedEntry } from '@/lib/watchlist';
-import { act, now, openMini, openView, refreshLive, selectedLive, selectedServer, state, toast } from '@/lib/store';
+import { act, now, openMini, openView, refreshLive, selectedLive, selectedServer, state, toast, togglePanel } from '@/lib/store';
 import type { Ban } from '@/types';
 
 /**
@@ -64,6 +64,67 @@ function copy(text: string, what: string): void {
     toast('info', `Copied the ${what}`);
 }
 
+/**
+ * Folding the panel (Ctrl+J) leaves a thin strip with the live signals.
+ * Opening a player or ban while it is folded peeks it open for that
+ * selection only: the saved choice stays folded, and the panel folds back
+ * when the selection is cleared.
+ */
+const peek = ref(false);
+const collapsed = computed(() => state.preferences.detailCollapsed && !peek.value);
+const selection = computed(() => (player.value ? `player:${player.value.steamId}` : ban.value ? `ban:${ban.value.steamId}` : null));
+
+watch(selection, (current) => {
+    peek.value = current !== null && state.preferences.detailCollapsed;
+});
+
+watch(
+    () => state.preferences.detailCollapsed,
+    () => {
+        peek.value = false;
+    },
+);
+
+const dot = computed(() => (live.value === undefined ? 'pending' : live.value.online ? 'online' : 'offline'));
+const stripTitle = computed(() => (status.value ? `${status.value.players} of ${status.value.maxPlayers} players · ${mapName(status.value.map)}` : (selectedServer.value?.name ?? 'Server')));
+
+function expand(): void {
+    if (state.preferences.detailCollapsed) {
+        togglePanel('detailCollapsed');
+    }
+}
+
+/** A peek only folds back; otherwise folding is remembered. */
+function collapse(): void {
+    if (peek.value) {
+        peek.value = false;
+    } else if (!state.preferences.detailCollapsed) {
+        togglePanel('detailCollapsed');
+    }
+}
+
+/** Ctrl+J, from anywhere in the page, but not while a dialog is open. */
+function onKey(event: KeyboardEvent): void {
+    if (!event.ctrlKey || event.altKey || event.shiftKey || event.metaKey || event.key.toLowerCase() !== 'j' || document.querySelector('[role="dialog"]')) {
+        return;
+    }
+
+    event.preventDefault();
+
+    if (event.repeat) {
+        return;
+    }
+
+    if (collapsed.value) {
+        expand();
+    } else {
+        collapse();
+    }
+}
+
+onMounted(() => window.addEventListener('keydown', onKey));
+onUnmounted(() => window.removeEventListener('keydown', onKey));
+
 function broadcast(): void {
     openView('overview');
     requestAnimationFrame(() => document.getElementById('broadcast')?.focus());
@@ -81,165 +142,273 @@ function unban(entry: Ban): void {
 </script>
 
 <template>
-    <aside class="detail">
-        <!-- A player -->
-        <template v-if="player">
-            <div class="hero player-hero" :style="{ '--faction': player.factionColor ?? 'var(--accent)' }">
-                <MapArt :map="status?.map" :lighting="status?.lighting" class="art" />
-                <div class="hero-buttons drag">
-                    <button type="button" class="icon-btn" :class="{ starred: isWatched(player.steamId) }" :title="isWatched(player.steamId) ? 'Stop watching' : 'Watch this player'" @click="toggleWatch(player)"><Star /></button>
-                    <button type="button" class="icon-btn" title="Steam profile" @click="openUrl(steamProfileUrl(player.steamId))"><ExternalLink /></button>
-                    <button type="button" class="icon-btn" title="Close" @click="state.selectedPlayer = null"><X /></button>
-                </div>
-                <h2 class="title hero-title">{{ player.name }}</h2>
-            </div>
+    <aside class="detail" :class="{ collapsed }">
+        <!-- Folded: a thin strip with the live signals -->
+        <div v-if="collapsed" class="strip" :title="stripTitle" @click="expand">
+            <div class="strip-top drag" />
+            <button type="button" class="icon-btn" title="Show details (Ctrl+J)" @click.stop="expand"><PanelRightOpen /></button>
+            <span class="strip-rule" />
+            <span class="dot" :class="dot" />
+            <span v-if="live?.online && status" class="strip-count num">
+                <strong>{{ status.players }}</strong>
+                <span>/{{ status.maxPlayers }}</span>
+            </span>
+            <span v-else class="strip-count num"><strong>–</strong></span>
+            <MapArt v-if="status" :map="status.map" :lighting="status.lighting" variant="square" :fade="false" class="strip-map" />
+        </div>
 
-            <div class="body">
-                <div class="pills">
-                    <span class="pill faction-pill" :style="{ '--faction': player.factionColor ?? 'var(--muted)' }"><span class="swatch" />{{ player.faction ?? 'No faction' }}</span>
-                    <span class="pill" :class="`ping-${pingLevel(player.pingMs)}`">{{ player.pingMs }} ms</span>
-                </div>
-
-                <div class="line">
-                    <span>K/D {{ ratio(player.kills, player.deaths) }}</span>
-                    <span class="num">{{ player.kills }} / {{ player.deaths }}</span>
-                </div>
-                <div class="progress"><span :style="{ width: `${percent(player.kills, player.kills + player.deaths || 1)}%` }" /></div>
-
-                <dl class="kv facts">
-                    <dt>Kills</dt>
-                    <dd class="num">{{ player.kills }}</dd>
-                    <dt>Deaths</dt>
-                    <dd class="num">{{ player.deaths }}</dd>
-                    <dt>Cash</dt>
-                    <dd class="num">${{ number(player.cash) }}</dd>
-                    <dt>Steam ID</dt>
-                    <dd>
-                        <button type="button" class="copy mono" title="Copy" @click="copy(player.steamId, 'Steam ID')">{{ player.steamId }} <Copy /></button>
-                    </dd>
-                </dl>
-
-                <label v-if="isWatched(player.steamId)" class="field watch-note">
-                    <span class="field-label">Watch note</span>
-                    <input class="input" :value="watchedEntry(player.steamId)?.note ?? ''" maxlength="200" placeholder="Why you watch them" @change="setWatchNote(player.steamId, ($event.target as HTMLInputElement).value)" />
-                </label>
-
-                <div class="tools">
-                    <button type="button" class="btn" @click="openPlayerAction('faction', player)"><Shuffle /> Move</button>
-                    <button type="button" class="btn" @click="killPlayer(player)"><Skull /> Kill</button>
-                    <button type="button" class="btn btn-danger" @click="openPlayerAction('kick', player)"><UserX /> Kick</button>
-                    <button type="button" class="btn btn-danger" @click="openPlayerAction('ban', player)"><BanIcon /> Ban</button>
+        <div v-else class="full">
+            <!-- A player -->
+            <template v-if="player">
+                <div class="hero player-hero" :style="{ '--faction': player.factionColor ?? 'var(--accent)' }">
+                    <MapArt :map="status?.map" :lighting="status?.lighting" class="art" />
+                    <div class="hero-buttons drag">
+                        <button type="button" class="icon-btn" :class="{ starred: isWatched(player.steamId) }" :title="isWatched(player.steamId) ? 'Stop watching' : 'Watch this player'" @click="toggleWatch(player)"><Star /></button>
+                        <button type="button" class="icon-btn" title="Steam profile" @click="openUrl(steamProfileUrl(player.steamId))"><ExternalLink /></button>
+                        <button type="button" class="icon-btn" title="Close" @click="state.selectedPlayer = null"><X /></button>
+                        <button type="button" class="icon-btn" title="Hide details (Ctrl+J)" @click="collapse"><PanelRightClose /></button>
+                    </div>
+                    <h2 class="title hero-title">{{ player.name }}</h2>
                 </div>
 
-                <div class="grow" />
-                <button type="button" class="btn btn-primary btn-lg btn-block cta" @click="openPlayerAction('message', player)"><MessageSquare /> Message {{ player.name }}</button>
-            </div>
-        </template>
-
-        <!-- A ban -->
-        <template v-else-if="ban">
-            <div class="hero">
-                <MapArt :map="status?.map" :lighting="status?.lighting" class="art" />
-                <div class="hero-buttons drag">
-                    <button type="button" class="icon-btn" title="Steam profile" @click="openUrl(steamProfileUrl(ban.steamId))"><ExternalLink /></button>
-                    <button type="button" class="icon-btn" title="Close" @click="state.selectedBan = null"><X /></button>
-                </div>
-                <h2 class="title hero-title">Banned player</h2>
-            </div>
-            <div class="body">
-                <div class="pills">
-                    <span class="pill pill-bad">Banned</span>
-                    <span v-if="ban.bannedBy" class="pill">by {{ ban.bannedBy }}</span>
-                </div>
-                <dl class="kv facts">
-                    <dt>Steam ID</dt>
-                    <dd>
-                        <button type="button" class="copy mono" @click="copy(ban.steamId, 'Steam ID')">{{ ban.steamId }} <Copy /></button>
-                    </dd>
-                    <dt>Reason</dt>
-                    <dd>{{ ban.reason || 'None given' }}</dd>
-                    <dt>Banned</dt>
-                    <dd>{{ ban.bannedAt ? dateTime(ban.bannedAt) : 'Before records (set in the server file)' }}</dd>
-                </dl>
-                <div class="grow" />
-                <button type="button" class="btn btn-primary btn-lg btn-block cta" @click="unban(ban)">Lift ban</button>
-            </div>
-        </template>
-
-        <!-- The server -->
-        <template v-else>
-            <div class="hero">
-                <MapArt :map="status?.map" :lighting="status?.lighting" class="art" />
-                <div class="hero-buttons drag">
-                    <button type="button" class="icon-btn" title="Mini monitor" @click="openMini"><PictureInPicture2 /></button>
-                    <button type="button" class="icon-btn" :class="{ spinning: state.loading[state.selectedId ?? ''] }" title="Refresh (F5)" @click="state.selectedId && refreshLive(state.selectedId, true)"><RefreshCw /></button>
-                </div>
-                <h2 class="title hero-title">{{ status ? mapName(status.map) : selectedServer?.name }}</h2>
-            </div>
-
-            <div class="body">
-                <template v-if="live?.online && status">
+                <div class="body">
                     <div class="pills">
-                        <span class="pill pill-gold">{{ modeName(status.experiences) }}</span>
-                        <span v-for="modifier in modifierNames(status.experiences)" :key="modifier" class="pill">{{ modifier }}</span>
-                        <span v-if="status.lighting" class="pill">{{ gameName(status.lighting) }}</span>
+                        <span class="pill faction-pill" :style="{ '--faction': player.factionColor ?? 'var(--muted)' }"><span class="swatch" />{{ player.faction ?? 'No faction' }}</span>
+                        <span class="pill" :class="`ping-${pingLevel(player.pingMs)}`">{{ player.pingMs }} ms</span>
                     </div>
 
                     <div class="line">
-                        <span>Players · {{ status.players }} of {{ status.maxPlayers }}</span>
-                        <span class="num">{{ fill }}%</span>
+                        <span>K/D {{ ratio(player.kills, player.deaths) }}</span>
+                        <span class="num">{{ player.kills }} / {{ player.deaths }}</span>
                     </div>
-                    <div class="progress"><span :style="{ width: `${fill}%` }" /></div>
+                    <div class="progress"><span :style="{ width: `${percent(player.kills, player.kills + player.deaths || 1)}%` }" /></div>
 
                     <dl class="kv facts">
-                        <dt>Server</dt>
-                        <dd class="truncate" :title="status.name">{{ status.name }}</dd>
-                        <dt>Leading</dt>
+                        <dt>Kills</dt>
+                        <dd class="num">{{ player.kills }}</dd>
+                        <dt>Deaths</dt>
+                        <dd class="num">{{ player.deaths }}</dd>
+                        <dt>Cash</dt>
+                        <dd class="num">${{ number(player.cash) }}</dd>
+                        <dt>Steam ID</dt>
                         <dd>
-                            <span v-if="leader" class="lead"><span class="swatch" :style="{ background: leader.color }" />{{ leader.name }} · {{ leader.score }}</span>
-                        </dd>
-                        <dt v-if="status.zone">Zone</dt>
-                        <dd v-if="status.zone">{{ zoneName(status.zone) }}</dd>
-                        <dt>Uptime</dt>
-                        <dd>{{ live.uptimeSeconds !== null ? formatUptime(live.uptimeSeconds) : '–' }}</dd>
-                        <dt v-if="nextEntry">Next</dt>
-                        <dd v-if="nextEntry">{{ nextEntry }}</dd>
-                        <dt v-if="identity?.serverId">Join code</dt>
-                        <dd v-if="identity?.serverId">
-                            <button type="button" class="copy mono" title="Copy" @click="copy(identity.serverId, 'join code')">{{ identity.serverId.slice(0, 13) }}… <Copy /></button>
+                            <button type="button" class="copy mono" title="Copy" @click="copy(player.steamId, 'Steam ID')">{{ player.steamId }} <Copy /></button>
                         </dd>
                     </dl>
 
-                    <p class="by muted">{{ selectedServer?.host }}:{{ selectedServer?.port }} · checked {{ ago(live.checkedAt, now) }}</p>
-                </template>
+                    <label v-if="isWatched(player.steamId)" class="field watch-note">
+                        <span class="field-label">Watch note</span>
+                        <input class="input" :value="watchedEntry(player.steamId)?.note ?? ''" maxlength="200" placeholder="Why you watch them" @change="setWatchNote(player.steamId, ($event.target as HTMLInputElement).value)" />
+                    </label>
 
-                <template v-else-if="live && !live.online">
-                    <div class="pills"><span class="pill pill-bad">Offline</span></div>
-                    <p class="offline">{{ live.error }}</p>
-                    <p class="by muted">{{ selectedServer?.host }}:{{ selectedServer?.port }} · checked {{ ago(live.checkedAt, now) }}</p>
-                    <p class="muted small">Restart the server from your host's panel if it is down. This app retries on its own.</p>
-                </template>
+                    <div class="tools">
+                        <button type="button" class="btn" @click="openPlayerAction('faction', player)"><Shuffle /> Move</button>
+                        <button type="button" class="btn" @click="killPlayer(player)"><Skull /> Kill</button>
+                        <button type="button" class="btn btn-danger" @click="openPlayerAction('kick', player)"><UserX /> Kick</button>
+                        <button type="button" class="btn btn-danger" @click="openPlayerAction('ban', player)"><BanIcon /> Ban</button>
+                    </div>
 
-                <template v-else>
-                    <div class="skeleton" style="height: 22px; width: 60%" />
-                    <div class="skeleton" style="height: 3px; margin-top: 18px" />
-                    <div class="skeleton" style="height: 110px; margin-top: 22px" />
-                </template>
+                    <div class="grow" />
+                    <button type="button" class="btn btn-primary btn-lg btn-block cta" @click="openPlayerAction('message', player)"><MessageSquare /> Message {{ player.name }}</button>
+                </div>
+            </template>
 
-                <div class="grow" />
-                <button type="button" class="btn btn-primary btn-lg btn-block cta" :disabled="!live?.online" @click="broadcast"><Megaphone /> Broadcast to everyone</button>
-            </div>
-        </template>
+            <!-- A ban -->
+            <template v-else-if="ban">
+                <div class="hero">
+                    <MapArt :map="status?.map" :lighting="status?.lighting" class="art" />
+                    <div class="hero-buttons drag">
+                        <button type="button" class="icon-btn" title="Steam profile" @click="openUrl(steamProfileUrl(ban.steamId))"><ExternalLink /></button>
+                        <button type="button" class="icon-btn" title="Close" @click="state.selectedBan = null"><X /></button>
+                        <button type="button" class="icon-btn" title="Hide details (Ctrl+J)" @click="collapse"><PanelRightClose /></button>
+                    </div>
+                    <h2 class="title hero-title">Banned player</h2>
+                </div>
+                <div class="body">
+                    <div class="pills">
+                        <span class="pill pill-bad">Banned</span>
+                        <span v-if="ban.bannedBy" class="pill">by {{ ban.bannedBy }}</span>
+                    </div>
+                    <dl class="kv facts">
+                        <dt>Steam ID</dt>
+                        <dd>
+                            <button type="button" class="copy mono" @click="copy(ban.steamId, 'Steam ID')">{{ ban.steamId }} <Copy /></button>
+                        </dd>
+                        <dt>Reason</dt>
+                        <dd>{{ ban.reason || 'None given' }}</dd>
+                        <dt>Banned</dt>
+                        <dd>{{ ban.bannedAt ? dateTime(ban.bannedAt) : 'Before records (set in the server file)' }}</dd>
+                    </dl>
+                    <div class="grow" />
+                    <button type="button" class="btn btn-primary btn-lg btn-block cta" @click="unban(ban)">Lift ban</button>
+                </div>
+            </template>
+
+            <!-- The server -->
+            <template v-else>
+                <div class="hero">
+                    <MapArt :map="status?.map" :lighting="status?.lighting" class="art" />
+                    <div class="hero-buttons drag">
+                        <button type="button" class="icon-btn" title="Mini monitor" @click="openMini"><PictureInPicture2 /></button>
+                        <button type="button" class="icon-btn" :class="{ spinning: state.loading[state.selectedId ?? ''] }" title="Refresh (F5)" @click="state.selectedId && refreshLive(state.selectedId, true)"><RefreshCw /></button>
+                        <button type="button" class="icon-btn" title="Hide details (Ctrl+J)" @click="collapse"><PanelRightClose /></button>
+                    </div>
+                    <h2 class="title hero-title">{{ status ? mapName(status.map) : selectedServer?.name }}</h2>
+                </div>
+
+                <div class="body">
+                    <template v-if="live?.online && status">
+                        <div class="pills">
+                            <span class="pill pill-gold">{{ modeName(status.experiences) }}</span>
+                            <span v-for="modifier in modifierNames(status.experiences)" :key="modifier" class="pill">{{ modifier }}</span>
+                            <span v-if="status.lighting" class="pill">{{ gameName(status.lighting) }}</span>
+                        </div>
+
+                        <div class="line">
+                            <span>Players · {{ status.players }} of {{ status.maxPlayers }}</span>
+                            <span class="num">{{ fill }}%</span>
+                        </div>
+                        <div class="progress"><span :style="{ width: `${fill}%` }" /></div>
+
+                        <dl class="kv facts">
+                            <dt>Server</dt>
+                            <dd class="truncate" :title="status.name">{{ status.name }}</dd>
+                            <dt>Leading</dt>
+                            <dd>
+                                <span v-if="leader" class="lead"><span class="swatch" :style="{ background: leader.color }" />{{ leader.name }} · {{ leader.score }}</span>
+                            </dd>
+                            <dt v-if="status.zone">Zone</dt>
+                            <dd v-if="status.zone">{{ zoneName(status.zone) }}</dd>
+                            <dt>Uptime</dt>
+                            <dd>{{ live.uptimeSeconds !== null ? formatUptime(live.uptimeSeconds) : '–' }}</dd>
+                            <dt v-if="nextEntry">Next</dt>
+                            <dd v-if="nextEntry">{{ nextEntry }}</dd>
+                            <dt v-if="identity?.serverId">Join code</dt>
+                            <dd v-if="identity?.serverId">
+                                <button type="button" class="copy mono" title="Copy" @click="copy(identity.serverId, 'join code')">{{ identity.serverId.slice(0, 13) }}… <Copy /></button>
+                            </dd>
+                        </dl>
+
+                        <p class="by muted">{{ selectedServer?.host }}:{{ selectedServer?.port }} · checked {{ ago(live.checkedAt, now) }}</p>
+                    </template>
+
+                    <template v-else-if="live && !live.online">
+                        <div class="pills"><span class="pill pill-bad">Offline</span></div>
+                        <p class="offline">{{ live.error }}</p>
+                        <p class="by muted">{{ selectedServer?.host }}:{{ selectedServer?.port }} · checked {{ ago(live.checkedAt, now) }}</p>
+                        <p class="muted small">Restart the server from your host's panel if it is down. This app retries on its own.</p>
+                    </template>
+
+                    <template v-else>
+                        <div class="skeleton" style="height: 22px; width: 60%" />
+                        <div class="skeleton" style="height: 3px; margin-top: 18px" />
+                        <div class="skeleton" style="height: 110px; margin-top: 22px" />
+                    </template>
+
+                    <div class="grow" />
+                    <button type="button" class="btn btn-primary btn-lg btn-block cta" :disabled="!live?.online" @click="broadcast"><Megaphone /> Broadcast to everyone</button>
+                </div>
+            </template>
+        </div>
     </aside>
 </template>
 
 <style scoped>
+/*
+ * The width animates between full and the folded strip. The full layer
+ * keeps its own width and hugs the right edge, so it slides in and out
+ * instead of squeezing its text.
+ */
 .detail {
-    display: flex;
-    flex-direction: column;
+    position: relative;
     width: var(--detail-w);
     flex: none;
+    overflow: hidden;
     background: var(--panel);
+    transition: width 0.22s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.detail.collapsed {
+    width: 52px;
+}
+
+.full {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: var(--detail-w);
+    display: flex;
+    flex-direction: column;
+}
+
+.strip {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 13px;
+    padding: 50.5px 0 20px;
+    cursor: pointer;
+    transition: background 0.12s;
+    animation: strip-in 0.22s ease;
+}
+
+.strip:hover {
+    background: color-mix(in srgb, var(--hover) 50%, transparent);
+}
+
+.strip-top {
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
+    height: 46px;
+}
+
+.strip-rule {
+    width: 22px;
+    height: 1px;
+    margin: 2px 0;
+    background: var(--line-soft);
+}
+
+.strip .dot {
+    margin-top: 2px;
+}
+
+.strip-count {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1.15;
+}
+
+.strip-count strong {
+    color: var(--text);
+    font-family: var(--font-title);
+    font-size: calc(15.5px * var(--title-scale, 1));
+    font-weight: 700;
+}
+
+.strip-count span {
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.strip-map {
+    flex: none;
+    width: 33px;
+    height: 33px;
+    border-radius: var(--radius);
+    box-shadow: inset 0 0 0 1px var(--line);
+}
+
+@keyframes strip-in {
+    from {
+        opacity: 0;
+    }
 }
 
 .hero {

@@ -100,7 +100,7 @@ const tab = defineModel<string>('tab');
     background: transparent;
     color: var(--text-2);
     font-family: var(--font-title);
-    font-size: 14px;
+    font-size: calc(14px * var(--title-scale, 1));
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;

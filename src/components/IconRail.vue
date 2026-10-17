@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronsLeft, ChevronsRight, Gauge, LayoutGrid, PanelLeftOpen, ScrollText, Search, Settings2 } from 'lucide-vue-next';
+import { ChevronsLeft, ChevronsRight, Gauge, LayoutGrid, ScrollText, Search, Settings2 } from 'lucide-vue-next';
 import BrandMark from '@/components/BrandMark.vue';
 import { BRAND } from '@/lib/brand';
 import { openView, section, state, togglePanel, type Section } from '@/lib/store';
@@ -48,10 +48,6 @@ function open(id: Section): void {
 
         <div class="spacer" />
 
-        <button v-if="state.preferences.sidebarCollapsed" type="button" class="item small" title="Show the sidebar (Ctrl+B)" @click="togglePanel('sidebarCollapsed')">
-            <PanelLeftOpen :stroke-width="1.75" />
-            <span>Sidebar</span>
-        </button>
         <button type="button" class="item small" :title="state.preferences.railCollapsed ? 'Show labels' : 'Icons only'" @click="togglePanel('railCollapsed')">
             <component :is="state.preferences.railCollapsed ? ChevronsRight : ChevronsLeft" :stroke-width="1.75" />
             <span>Collapse</span>
@@ -101,7 +97,7 @@ function open(id: Section): void {
     background: transparent;
     color: var(--muted);
     font-family: var(--font-title);
-    font-size: 11px;
+    font-size: calc(11px * var(--title-scale, 1));
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
