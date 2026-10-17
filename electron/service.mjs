@@ -531,7 +531,7 @@ async function noteBanList(serverId, name, args) {
  * locked by the licence or not answering is skipped with the reason.
  *
  * @param {import('./banlists.mjs').BanGroup} group
- * @param {(serverId: string) => Promise<boolean>} isLocked
+ * @param {(serverId: string) => Promise<{ message: string } | null>} isLocked why a server is locked, or null
  */
 async function readLinked(group, isLocked) {
     const saved = await servers.list();
@@ -544,8 +544,11 @@ async function readLinked(group, isLocked) {
                 return { serverId, serverName: 'A removed server', skipped: 'It is no longer saved in the app.' };
             }
 
-            if (await isLocked(serverId)) {
-                return { serverId, serverName: server.name, skipped: 'Locked: the free trial has ended.' };
+            // The lock check answers with the reason (plan limit, trial or licence ended), or nothing.
+            const lock = await isLocked(serverId);
+
+            if (lock) {
+                return { serverId, serverName: server.name, skipped: `Locked: ${typeof lock === 'object' && lock.message ? lock.message : 'the free trial has ended.'}` };
             }
 
             forget(serverId, 'bans');
@@ -575,7 +578,7 @@ const publicPlan = (plan) => ({
  * nothing.
  *
  * @param {string} groupId
- * @param {(serverId: string) => Promise<boolean>} isLocked
+ * @param {(serverId: string) => Promise<{ message: string } | null>} isLocked why a server is locked, or null
  */
 export async function banListPlan(groupId, isLocked) {
     const group = (await banLists.list()).find((entry) => entry.id === groupId);
@@ -595,7 +598,7 @@ export async function banListPlan(groupId, isLocked) {
  *
  * @param {string} groupId
  * @param {string} confirmed
- * @param {(serverId: string) => Promise<boolean>} isLocked
+ * @param {(serverId: string) => Promise<{ message: string } | null>} isLocked why a server is locked, or null
  */
 export async function banListSync(groupId, confirmed, isLocked) {
     if (syncing.has(groupId)) {

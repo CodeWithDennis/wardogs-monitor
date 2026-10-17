@@ -41,8 +41,10 @@ export interface LiveStatus {
 
 export interface Live {
     online: boolean;
-    /** The trial ended without a licence; this is a real server. */
+    /** A real server the licence does not cover right now; `error` says why. */
     locked?: boolean;
+    /** 'licence' when the trial or licence ended; 'plan' when it is beyond the plan's number of servers. */
+    lockedBy?: 'licence' | 'plan';
     error: string | null;
     checkedAt: string;
     status: LiveStatus | null;
@@ -226,21 +228,42 @@ export interface Preferences {
     broadcasts: string[];
 }
 
+export interface LicenceSubscription {
+    status: 'active' | 'past_due' | 'incomplete' | 'paused' | 'cancelled' | null;
+    interval: 'monthly' | 'yearly' | null;
+    renews_at: string | null;
+    cancel_at_period_end: boolean;
+}
+
 export interface LicenceStatus {
     state: 'licensed' | 'trial' | 'expired';
-    reason?: 'trial' | 'licence';
+    /** Why it is locked: the trial or licence ended, the website revoked it, or it could not be checked online for too long. */
+    reason?: 'trial' | 'licence' | 'revoked' | 'offline';
     licensee: string | null;
     email: string | null;
     plan: string | null;
     expires: string | null;
     trialDaysLeft: number;
     trialDays: number;
+    /** How many real servers work: null for unlimited, 0 when locked. */
+    maxServers: number | null;
+    /** Null for licences issued by hand, or before the first online check. */
+    subscription: LicenceSubscription | null;
+    /** PCs using the licence, as of the last online check. */
+    seats: { used: number; max: number } | null;
+    /** The last time the website answered a check. */
+    lastCheckedAt: string | null;
+    /** Whether the website has confirmed this licence on this PC. */
+    onlineConfirmed: boolean;
+    /** The website's reason when it turned the last check down without revoking. */
+    onlineError: string | null;
 }
 
 export interface PanelApi {
     servers: {
         list(): Promise<SavedServer[]>;
-        save(input: { id?: string; name: string; host: string; port: number; password?: string }): Promise<{ ok: true; server: SavedServer } | { ok: false; error: string }>;
+        /** `limit` is set when a new server does not fit the plan. */
+        save(input: { id?: string; name: string; host: string; port: number; password?: string }): Promise<{ ok: true; server: SavedServer } | { ok: false; error: string; limit?: boolean }>;
         remove(id: string): Promise<void>;
         reorder(ids: string[]): Promise<void>;
         addDemo(): Promise<SavedServer>;
@@ -267,6 +290,8 @@ export interface PanelApi {
     license: {
         status(): Promise<LicenceStatus>;
         activate(key: string): Promise<{ ok: true; status: LicenceStatus } | { ok: false; error: string }>;
+        /** Check with the website now. */
+        check(): Promise<LicenceStatus>;
         remove(): Promise<LicenceStatus>;
         onChange(callback: (status: LicenceStatus) => void): () => void;
     };

@@ -265,20 +265,22 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
     display: flex;
     justify-content: center;
     padding-top: 12vh;
-    background: rgb(0 0 0 / 0.5);
+    background: rgb(5 7 15 / 0.62);
+    backdrop-filter: blur(2px);
 }
 
 .palette {
     display: flex;
     flex-direction: column;
     width: 682px;
-    max-width: calc(100vw - 53px);
+    max-width: calc(100vw - 48px);
     max-height: 64vh;
-    border: 1px solid var(--line);
-    border-top: 1px solid var(--accent-line);
-    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--pop-line);
+    border-top-color: var(--accent-line);
+    border-radius: var(--radius-pop);
     background: var(--panel);
-    box-shadow: 0 33px 77px rgb(0 0 0 / 0.55);
+    box-shadow: var(--shadow-pop);
     animation: rise 0.14s ease;
 }
 
@@ -317,12 +319,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
 }
 
 .group-label {
-    padding: 11px 11px 5.5px;
+    padding: 11px 11px 6px;
     color: var(--faint);
-    font-family: var(--font-title);
-    font-size: calc(11.5px * var(--title-scale, 1));
+    font-family: var(--font-body);
+    font-size: 11.5px;
     font-weight: 600;
-    letter-spacing: 0.12em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
 }
 

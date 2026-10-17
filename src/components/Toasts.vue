@@ -27,28 +27,32 @@ const icons = { ok: CircleCheck, error: CircleAlert, info: Info };
     bottom: 22px;
     z-index: 60;
     display: grid;
-    gap: 9px;
+    gap: 10px;
     width: 374px;
+    max-width: calc(100vw - 44px);
 }
 
+/* The same finish as dialogs and menus, with a coloured stripe for the kind. */
 .toast {
+    --stripe: var(--accent);
     display: flex;
     align-items: flex-start;
     gap: 12px;
-    padding: 13px 13px 13px 15.5px;
-    border: 1px solid var(--line);
-    border-left: 2px solid var(--accent);
-    border-radius: var(--radius);
-    background: var(--raise);
-    box-shadow: 0 15.5px 37.5px rgb(0 0 0 / 0.45);
+    padding: 12px 10px 12px 16px;
+    border: 1px solid var(--pop-line);
+    border-radius: var(--radius-pop);
+    background: var(--panel);
+    box-shadow:
+        inset 3px 0 0 var(--stripe),
+        var(--shadow-pop);
 }
 
 .toast.ok {
-    border-left-color: var(--ok);
+    --stripe: var(--ok);
 }
 
 .toast.error {
-    border-left-color: var(--bad);
+    --stripe: var(--bad);
 }
 
 .icon {
@@ -78,7 +82,7 @@ const icons = { ok: CircleCheck, error: CircleAlert, info: Info };
 
 .text strong {
     display: block;
-    font-weight: 500;
+    font-weight: 600;
     overflow-wrap: anywhere;
 }
 

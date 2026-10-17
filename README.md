@@ -41,6 +41,8 @@
 - **Search everything (Ctrl+K)**: players on every server by name or Steam ID, players who just left, servers, pages and actions.
 - **Watchlist**: star a player to get a Windows notification whenever they join any server, with a note on why you watch them.
 - **Alerts**: a notification when a server goes down or comes back.
+- **Linked ban lists**: link servers into one shared ban list (Options → Ban lists). On start, or with Sync, the app shows what differs per server and adds the missing bans only after you confirm; unbans made in the app apply to every linked server.
+- **Plans**: Basic (3 servers), Clan (5), Community (10) or Alliance (unlimited), monthly or yearly. The limit comes from the signed key; extra servers lock after a downgrade, never deleted. The trial allows 10 servers.
 - **Mini monitor**: a small always-on-top window with the map, score race and player count, to keep over the game.
 - **Activity log**: every action taken from the app, per server, with failures.
 - **Themes**: 24 themes (Midnight by default, plus Carbon, Graphite, Blackout, Nord, Dracula, Gruvbox, Tokyo Night and more) and four accent colours. Zoom with Ctrl + / Ctrl − / Ctrl 0 or Ctrl + mouse wheel.
@@ -136,22 +138,23 @@ Code signing: the workflow builds unsigned (`CSC_IDENTITY_AUTO_DISCOVERY=false`)
 
 ## Licensing: selling the app
 
-The app runs a **14-day free trial** from its first start (`trialDays` in `brand.json`). After that, real servers are locked until a licence key is activated; the demo server always works. The lock is enforced in Electron's main process, not just hidden in the window.
+The app runs a **14-day free trial** from its first start (`trialDays` in `brand.json`), for up to 10 servers. After that, real servers are locked until a licence key is activated; the demo server always works and never counts. The lock is enforced in Electron's main process, not just hidden in the window.
 
-A licence key is the licence itself (name, email, plan, optional end date), signed with an Ed25519 private key. The app ships only the public key, so it can check keys offline but can never make them. Editing a key, or signing one with another private key, makes it invalid. Keys look like `WDM-<licence>.<signature>`.
+Every plan has every feature; plans differ in how many servers they run: Basic 3, Clan 5, Community 10, Alliance unlimited. Servers beyond the limit are locked, never deleted: the first ones in the saved order (`servers.json`, the order the switcher shows) stay usable, and adding one more is refused until the user upgrades or removes one.
+
+A licence key is the licence itself (name, email, plan, number of servers, optional end date), signed with an Ed25519 private key. The app ships only the public key, so it can check keys offline but can never make them. Editing a key, or signing one with another private key, makes it invalid. Keys look like `WDM-<licence>.<signature>`.
 
 ```bash
 node scripts/license/keygen.mjs      # once: makes license-signing/private.pem and electron/license-public-key.mjs
-node scripts/license/issue.mjs --name "Jane Doe" --email jane@example.com --plan pro         # never ends
+node scripts/license/issue.mjs --name "Jane Doe" --email jane@example.com --plan clan --servers 5   # never ends
 node scripts/license/issue.mjs --name "Jane Doe" --email jane@example.com --days 365         # one year
 ```
 
 - **Back up `license-signing/private.pem`** somewhere safe and never share or commit it. It is git-ignored and never packaged. Losing it means new keys won't work in the app you already shipped; leaking it lets anyone make keys. Running `keygen.mjs --force` makes a new pair and invalidates every key sold so far.
 - Customers paste their key under **Options → Licence**. **Remove from this PC** frees it to move to another PC.
 - Selling through Lemon Squeezy, Gumroad or Paddle works by issuing a key when an order comes in, by hand or from their webhook with `issue.mjs`.
-- Offline keys can be copied between PCs; the licensee's name shows in the app, which discourages sharing. For hard seat limits, add online activation through a licence API such as Lemon Squeezy's `/v1/licenses/activate`.
 - The trial start lives in the app's data folder, so deleting that folder restarts the trial.
-- **Planned:** online activation, payments (Stripe) and licence management on [wardogsmonitor.com](https://wardogsmonitor.com), a Laravel site built on [Larament](https://github.com/codewithdennis/larament). The app will check keys against it, with the offline signature kept as a fallback.
+- **Online check** against [wardogsmonitor.com](https://wardogsmonitor.com)'s licence API (`${website}/api/v1`, or `PANEL_LICENSE_API`, e.g. `https://wardogs-monitor.test/api/v1`; `off` disables it). Activating checks the key offline, then `POST /licenses/activate` takes a seat for this PC; if the site is down it activates offline and confirms later. On start and every 12 hours `POST /licenses/validate` swaps in a re-signed key (renewals, plan changes) and stores the signed status token (`WDMS-…`). A revoked licence is removed; when the site cannot be reached the app keeps working until the last token's `valid_until`, or on the key alone if it never got one. **Remove from this PC** also calls `POST /licenses/deactivate`. Only the key, a random device ID (`device.json`) and the PC's name are sent.
 
 ## Renaming and branding
 
@@ -188,8 +191,9 @@ electron/
   service.mjs               live readings, catalog, settings and actions, with caching
   store.mjs                 saved servers (DPAPI-encrypted passwords) and the activity log
   preferences.mjs           preferences, defaults and migrations
-  license-core.mjs          licence key signing, checking and trial maths
-  license.mjs               the licence and trial on this PC
+  license-core.mjs          licence key signing, checking, trial maths and server limits
+  license-online.mjs        the website's licence API: activate, validate, deactivate
+  license.mjs               the licence, trial and device ID on this PC
 mock/wardogs-mock.mjs       the pretend server behind the demo and the tests
 scripts/
   dev.mjs                   Vite + Electron for development
@@ -210,7 +214,7 @@ tests/                      node:test suites
 - RCON passwords are encrypted with Windows DPAPI (Electron `safeStorage`) for the current Windows account, and never reach the window.
 - The config document, which contains the RCON password, stays in the main process; the window only ever sees the values it edits.
 - The window runs sandboxed with context isolation and a strict content security policy. Only Steam profiles and the product website open in the browser.
-- Nothing is sent anywhere except to your own servers. Licence keys are checked offline.
+- Nothing is sent anywhere except to your own servers and, for a licence, the website's licence API: only the key, a random ID for this PC and the PC's name. Keys and the website's status tokens are checked offline with the public key.
 - The Wardogs RCON API itself is plain HTTP, so the password travels unencrypted between your PC and the server, as it does with every RCON tool for this game.
 
 ## Before selling

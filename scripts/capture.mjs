@@ -14,12 +14,18 @@ export async function captureViews({ app, mainWindow, openMini, getMini, dir }) 
     web.on('console-message', (_event, level, message) => level >= 2 && console.log('[page]', message));
     const run = (code) => web.executeJavaScript(code);
     const shot = async (name, window = mainWindow) => {
-        // Capturing can fail now and then while the GPU is busy; one retry is enough.
-        const image = await window.webContents.capturePage().catch(async () => {
-            await wait(800);
+        // Capturing can fail now and then while the GPU is busy, so try a few times.
+        const capture = (tries) =>
+            window.webContents.capturePage().catch(async (error) => {
+                if (tries <= 1) {
+                    throw error;
+                }
 
-            return window.webContents.capturePage();
-        });
+                await wait(1000);
+
+                return capture(tries - 1);
+            });
+        const image = await capture(4);
         await writeFile(path.join(dir, `${name}.png`), image.toPNG());
         console.log(`[capture] ${name}`);
     };
@@ -153,6 +159,8 @@ export async function captureViews({ app, mainWindow, openMini, getMini, dir }) 
     await shot('20-olive-drab');
     await run(`window.panel.preferences.set({ theme: 'midnight', accent: 'gold' })`);
 
+    await captureDialogs({ mainWindow, run, click, shot });
+
     // Licence: the trial, then an ended trial (servers locked), then a key activated.
     const tab = (label) => run(`[...document.querySelectorAll('.tabs button')].find((b) => b.textContent.includes('${label}'))?.click()`);
     await click('[data-section="options"]');
@@ -172,6 +180,20 @@ export async function captureViews({ app, mainWindow, openMini, getMini, dir }) 
     console.log('[capture] after trial ended:', await run(`document.querySelector('.view-header h2')?.textContent + ' / ' + (document.querySelector('.banner')?.textContent ?? 'no banner').trim()`));
     await shot('22-trial-ended');
 
+    // The banner at the smallest window, and zoomed out, must stay clear of the window's own buttons.
+    mainWindow.setSize(1180, 720);
+    await wait(800);
+    await shot('22b-trial-ended-min');
+    const captionArea = () => run(`(() => { const d = document.createElement('div'); d.style.cssText = 'position:fixed;width:var(--caption-w);height:var(--caption-h)'; document.body.append(d); const r = [d.offsetWidth, d.offsetHeight]; d.remove(); return r; })()`);
+    console.log('[capture] caption area (CSS px) at 100%:', await captionArea());
+    await run(`window.panel.setZoom(0.67)`);
+    await wait(800);
+    console.log('[capture] caption area (CSS px) at 67%:', await captionArea());
+    await shot('22c-trial-ended-zoomed-out');
+    await run(`window.panel.setZoom(1)`);
+    mainWindow.setSize(1500, 920);
+    await wait(800);
+
     const { issueKey } = await import('../electron/license-core.mjs');
     const brandJson = JSON.parse(readSync(new URL('../brand.json', import.meta.url), 'utf8'));
     const licenceKey = issueKey({ name: 'Jane Doe', email: 'jane@example.com', plan: 'pro', days: 365 }, readSync(new URL('../license-signing/private.pem', import.meta.url), 'utf8'), brandJson.licenseKeyPrefix);
@@ -190,6 +212,114 @@ export async function captureViews({ app, mainWindow, openMini, getMini, dir }) 
     await shot('14-mini', getMini());
 
     app.quit();
+}
+
+/**
+ * Every dialog at the smallest window size (so no button spills out of
+ * one), then a few pages and a dialog in two other headline fonts. Only
+ * opens dialogs and cancels them; the one ban list it makes lives in the
+ * throwaway data folder.
+ */
+async function captureDialogs({ mainWindow, run, click, shot }) {
+    const web = mainWindow.webContents;
+    const reload = async () => {
+        const loaded = new Promise((resolve) => web.once('did-finish-load', resolve));
+        web.reload();
+        await loaded;
+        await wait(3500);
+    };
+    const press = (selector, text) => run(`[...document.querySelectorAll(${JSON.stringify(selector)})].find((b) => b.textContent.includes(${JSON.stringify(text)}))?.click()`);
+    const cancel = async () => {
+        await click('.modal footer .btn-ghost:not(.demo)');
+        await wait(400);
+    };
+
+    mainWindow.setSize(1180, 720);
+    await wait(800);
+
+    await click('[data-section="servers"]');
+    await wait(1200);
+    await shot('30-min-servers');
+    await click('.view-header .actions .btn-primary');
+    await wait(500);
+    await shot('31-add-server');
+    await cancel();
+
+    await click('.server-card .menu-wrap .icon-btn');
+    await wait(400);
+    await click('.server-card .menu .bad');
+    await wait(500);
+    await shot('32-remove-confirm-min');
+    await cancel();
+
+    // A linked ban list over all three servers, for the sync preview and the two-way unban question.
+    const ids = await run(`window.panel.servers.list().then((list) => list.map((server) => server.id))`);
+    console.log('[capture] ban list:', JSON.stringify(await run(`window.panel.banLists.save(${JSON.stringify({ name: 'Alpha bans', serverIds: ids })})`)).slice(0, 160));
+    await reload();
+
+    await click('[data-section="options"]');
+    await wait(400);
+    await press('.tabs button', 'Ban lists');
+    await wait(800);
+    await shot('33-ban-lists');
+    await press('.banlists .btn-primary', 'Sync now');
+    await wait(3000);
+    await shot('34-ban-sync');
+    await cancel();
+
+    await click('[data-section="servers"]');
+    await wait(800);
+    await click('.server-card');
+    await wait(1200);
+    await click('[data-view="bans"]');
+    await wait(1500);
+    await press('.view-body .btn, .toolbar .btn, .view-header .btn', 'Ban a Steam ID');
+    await wait(500);
+    await shot('35-add-ban');
+    await cancel();
+    await click('.ban');
+    await wait(600);
+    await click('.detail .cta');
+    await wait(600);
+    await shot('36-unban-choice');
+    await cancel();
+
+    await click('[data-view="players"]');
+    await wait(1000);
+    await run(`document.querySelectorAll('.player')[1]?.click()`);
+    await wait(800);
+    await press('.detail .btn', 'Kick');
+    await wait(500);
+    await shot('37-kick');
+    await cancel();
+
+    await click('[data-view="rotation"]');
+    await wait(1500);
+    await press('.btn', 'Add match');
+    await wait(800);
+    await shot('38-match-picker');
+    await cancel();
+
+    for (const font of ['oxanium', 'black-ops-one']) {
+        await run(`window.panel.preferences.set({ titleFont: '${font}' })`);
+        await wait(600);
+        await click('[data-view="players"]');
+        await wait(1000);
+        await shot(`40-${font}-players`);
+        await click('[data-section="servers"]');
+        await wait(1000);
+        await shot(`41-${font}-servers`);
+        await click('.view-header .actions .btn-primary');
+        await wait(500);
+        await shot(`42-${font}-add-server`);
+        await cancel();
+        await click('[data-section="control"]');
+        await wait(600);
+    }
+
+    await run(`window.panel.preferences.set({ titleFont: 'barlow-condensed' })`);
+    mainWindow.setSize(1500, 920);
+    await wait(800);
 }
 
 /**

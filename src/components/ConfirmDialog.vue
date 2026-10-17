@@ -4,7 +4,7 @@ import { answerConfirm, confirmation } from '@/lib/store';
 </script>
 
 <template>
-    <Modal :open="confirmation !== null" :title="confirmation?.title ?? ''" :width="confirmation?.alternativeLabel ? 506 : 420" @close="answerConfirm(false)">
+    <Modal :open="confirmation !== null" :title="confirmation?.title ?? ''" :width="confirmation?.alternativeLabel ? 460 : 420" @close="answerConfirm(false)">
         <p class="text">{{ confirmation?.body }}</p>
         <template #footer>
             <button type="button" class="btn btn-ghost" @click="answerConfirm(false)">Cancel</button>

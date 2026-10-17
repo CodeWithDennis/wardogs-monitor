@@ -25,7 +25,7 @@ const entries = computed(() =>
         return {
             server,
             dot: live === undefined ? 'pending' : live.online ? 'online' : 'offline',
-            detail: live?.online && live.status ? `${live.status.players}/${live.status.maxPlayers} · ${mapName(live.status.map)}` : live ? 'Offline' : 'Connecting…',
+            detail: live?.online && live.status ? `${live.status.players}/${live.status.maxPlayers} · ${mapName(live.status.map)}` : live?.locked ? 'Locked' : live ? 'Offline' : 'Connecting…',
         };
     }),
 );
@@ -197,33 +197,33 @@ small {
     z-index: 30;
     width: 330px;
     max-height: 462px;
-    padding: 6.5px;
+    padding: 5px;
     overflow: auto;
-    border: 1px solid var(--line);
-    border-top: 1px solid var(--accent-line);
-    border-radius: var(--radius);
+    border: 1px solid var(--pop-line);
+    border-top-color: var(--accent-line);
+    border-radius: var(--radius-pop);
     background: var(--panel);
-    box-shadow: 0 20px 48.5px rgb(0 0 0 / 0.5);
+    box-shadow: var(--shadow-pop);
     outline: none;
 }
 
 .menu-label {
-    padding: 6.5px 11px 6.5px;
+    padding: 7px 10px 6px;
     color: var(--faint);
-    font-family: var(--font-title);
-    font-size: calc(11.5px * var(--title-scale, 1));
+    font-family: var(--font-body);
+    font-size: 11.5px;
     font-weight: 600;
-    letter-spacing: 0.12em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
 }
 
 .option {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     width: 100%;
-    min-height: 48.5px;
-    padding: 4.5px 11px;
+    min-height: 48px;
+    padding: 4px 10px;
     border: 0;
     border-radius: var(--radius);
     background: transparent;
@@ -253,20 +253,25 @@ small {
 }
 
 .action {
-    min-height: 39.5px;
+    min-height: 34px;
     color: var(--text-2);
-    font-size: 14.5px;
+    font-size: 14px;
+}
+
+.action:hover {
+    color: var(--text);
 }
 
 .action svg {
-    width: 16.5px;
-    height: 16.5px;
+    width: 16px;
+    height: 16px;
+    flex: none;
     color: var(--muted);
 }
 
 .divider {
     height: 1px;
-    margin: 6.5px 4.5px;
+    margin: 5px 4px;
     background: var(--line-soft);
 }
 

@@ -5,7 +5,9 @@ import { fileURLToPath } from 'node:url';
 import brand from '../brand.json' with { type: 'json' };
 import { startMockServer } from '../mock/wardogs-mock.mjs';
 import { LIMITS } from './config.mjs';
+import { canAddServer, lockedServerIds, planLimitMessage } from './license-core.mjs';
 import { licence } from './license.mjs';
+import { CHECK_EVERY_MS } from './license-online.mjs';
 import { dropServer, removeGroup, saveGroup } from './banlists.mjs';
 import { act, banListPlan, banListSync, bans, catalog, clearCache, identity, live, probe, readSettings, rotation } from './service.mjs';
 import { activity, banLists, preferences, servers, ZOOM_STEPS } from './store.mjs';
@@ -281,13 +283,58 @@ function cleanServer(input) {
     return { value: { id: input?.id ? String(input.id) : undefined, name, host: host.replace(/^\[|\]$/g, ''), port, password } };
 }
 
-const LOCKED = 'Your free trial has ended. Activate a licence under Options → Licence to keep using your servers. The demo server still works.';
+/** Why every real server is locked, per reason the licence gives. */
+const LOCKED = {
+    trial: 'Your free trial has ended. Activate a licence under Options → Licence to keep using your servers. The demo server still works.',
+    licence: 'Your licence has ended. Renew it under Options → Licence → Manage subscription; the app picks up the renewal by itself. The demo server still works.',
+    revoked: 'Your licence was revoked. Activate another licence under Options → Licence to keep using your servers. The demo server still works.',
+    offline: 'Your licence could not be confirmed online for too long. Connect this PC to the internet so the app can check it. The demo server still works.',
+};
 
-/** Real servers need the trial or a licence; the demo server always works. */
-async function isLocked(serverId) {
-    const server = (await servers.list()).find((entry) => entry.id === serverId);
+/**
+ * Whether a server is locked, and why. Real servers need the trial or a
+ * licence, and only the plan's number of them work: the first ones in the
+ * saved order, the rest are locked (never deleted). The demo server always
+ * works.
+ *
+ * @returns {Promise<{ by: 'licence' | 'plan', message: string } | null>}
+ */
+async function lockOf(serverId) {
+    const saved = await servers.list();
+    const server = saved.find((entry) => entry.id === serverId);
 
-    return Boolean(server && !server.demo && !(await licence.unlocked()));
+    if (!server || server.demo) {
+        return null;
+    }
+
+    const status = await licence.status();
+
+    if (status.state === 'expired') {
+        return { by: 'licence', message: LOCKED[status.reason] ?? LOCKED.trial };
+    }
+
+    return lockedServerIds(saved, status.maxServers).has(serverId) ? { by: 'plan', message: planLimitMessage(status) } : null;
+}
+
+/** Tell every window the licence changed (servers may have locked or unlocked). */
+function announceLicence(status) {
+    BrowserWindow.getAllWindows().forEach((window) => window.webContents.send('license:changed', status));
+}
+
+/** Check the licence with the website; tell the windows when anything changed. */
+async function checkLicence() {
+    try {
+        const before = JSON.stringify(await licence.status());
+        const after = await licence.check();
+
+        if (JSON.stringify(after) !== before) {
+            announceLicence(after);
+        }
+
+        return after;
+    } catch {
+        return licence.status();
+    }
 }
 
 /** A ban list as the window sees it: its servers and counts, not every ban. */
@@ -306,7 +353,11 @@ function registerIpc() {
 
     /** A server read or action that the licence gates, with what to answer when locked. */
     const gated = (channel, fn, lockedAnswer) =>
-        handle(channel, async (id, ...rest) => ((await isLocked(String(id))) ? lockedAnswer() : fn(String(id), ...rest)));
+        handle(channel, async (id, ...rest) => {
+            const lock = await lockOf(String(id));
+
+            return lock ? lockedAnswer(lock.message, lock.by) : fn(String(id), ...rest);
+        });
 
     handle('servers:list', () => servers.list());
     handle('servers:save', async (input) => {
@@ -318,6 +369,18 @@ function registerIpc() {
 
         if (!value.id && !value.password) {
             return { ok: false, error: 'Enter the RCON password.' };
+        }
+
+        // A new server must fit the plan (editing one is fine). Once the trial
+        // or licence has ended every real server is locked anyway.
+        const saved = await servers.list();
+
+        if (!saved.some((server) => server.id === value.id)) {
+            const status = await licence.status();
+
+            if (status.state !== 'expired' && !canAddServer(saved, status.maxServers)) {
+                return { ok: false, error: planLimitMessage(status, 'add'), limit: true };
+            }
         }
 
         // Check the server answers with this password before saving it.
@@ -346,13 +409,13 @@ function registerIpc() {
         return existing ?? servers.save({ name: 'Demo server', host: '127.0.0.1', port: mock.port, password: mock.password, demo: true });
     });
 
-    gated('server:live', (id) => live(id), () => ({ online: false, locked: true, error: LOCKED, checkedAt: new Date().toISOString(), status: null, players: [], uptimeSeconds: null }));
-    gated('server:bans', (id) => bans(id), () => ({ error: LOCKED, bans: [] }));
-    gated('server:rotation', (id) => rotation(id), () => ({ error: LOCKED, enabled: false, mode: null, entries: [] }));
-    gated('server:catalog', (id) => catalog(id), () => ({ error: LOCKED, maps: [], lightings: [] }));
+    gated('server:live', (id) => live(id), (error, by) => ({ online: false, locked: true, lockedBy: by, error, checkedAt: new Date().toISOString(), status: null, players: [], uptimeSeconds: null }));
+    gated('server:bans', (id) => bans(id), (error) => ({ error, bans: [] }));
+    gated('server:rotation', (id) => rotation(id), (error) => ({ error, enabled: false, mode: null, entries: [] }));
+    gated('server:catalog', (id) => catalog(id), (error) => ({ error, maps: [], lightings: [] }));
     gated('server:identity', (id) => identity(id).catch(() => ({ serverId: null, bannerUrl: null })), () => ({ serverId: null, bannerUrl: null }));
-    gated('server:settings', (id) => readSettings(id), () => ({ error: LOCKED, revision: null, writable: false, settings: null, rotation: null }));
-    gated('server:act', (id, name, args) => act(id, String(name), args ?? {}), () => ({ ok: false, error: LOCKED }));
+    gated('server:settings', (id) => readSettings(id), (error) => ({ error, revision: null, writable: false, settings: null, rotation: null }));
+    gated('server:act', (id, name, args) => act(id, String(name), args ?? {}), (error) => ({ ok: false, error }));
 
     // Linked ban lists. Planning only reads; a sync writes only the plan the
     // user confirmed in the preview (its fingerprint must still match).
@@ -377,10 +440,10 @@ function registerIpc() {
     handle('banlists:remove', async (id) => {
         await banLists.update((groups) => ({ groups: removeGroup(groups, String(id)) }));
     });
-    handle('banlists:plan', (id) => (groupId(id) ? banListPlan(id, isLocked) : { ok: false, error: 'That ban list no longer exists.' }));
+    handle('banlists:plan', (id) => (groupId(id) ? banListPlan(id, lockOf) : { ok: false, error: 'That ban list no longer exists.' }));
     handle('banlists:sync', (id, fingerprint) =>
         groupId(id) && typeof fingerprint === 'string' && /^[0-9a-f]{16}$/.test(fingerprint)
-            ? banListSync(id, fingerprint, isLocked)
+            ? banListSync(id, fingerprint, lockOf)
             : { ok: false, error: 'Check the differences first, then confirm the sync.' },
     );
 
@@ -389,14 +452,15 @@ function registerIpc() {
         const result = await licence.activate(String(key ?? ''));
 
         if (result.ok) {
-            BrowserWindow.getAllWindows().forEach((window) => window.webContents.send('license:changed', result.status));
+            announceLicence(result.status);
         }
 
         return result;
     });
+    handle('license:check', () => checkLicence());
     handle('license:remove', async () => {
         const status = await licence.remove();
-        BrowserWindow.getAllWindows().forEach((window) => window.webContents.send('license:changed', status));
+        announceLicence(status);
 
         return status;
     });
@@ -457,6 +521,10 @@ if (!app.requestSingleInstanceLock()) {
         }
 
         await createMainWindow();
+
+        // Check the licence with the website now and every 12 hours.
+        checkLicence();
+        setInterval(checkLicence, CHECK_EVERY_MS);
 
         if (process.env.PANEL_CLICKTEST) {
             const { clickTest } = await import('../scripts/capture.mjs');

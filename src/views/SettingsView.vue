@@ -368,7 +368,7 @@ function int(field: keyof ServerSettings, event: Event): void {
 }
 
 .with-button .btn {
-    width: 39.5px;
+    width: 36px;
     padding: 0;
     flex: none;
 }
@@ -376,7 +376,7 @@ function int(field: keyof ServerSettings, event: Event): void {
 .lock {
     position: absolute;
     right: 12px;
-    top: 11px;
+    top: 10px;
     width: 15.5px;
     height: 15.5px;
     color: var(--muted);

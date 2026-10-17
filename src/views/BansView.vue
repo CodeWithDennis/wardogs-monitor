@@ -193,10 +193,11 @@ async function ban(): Promise<void> {
 }
 
 .head {
-    height: 37.5px;
+    height: 38px;
     color: var(--faint);
-    font-size: 12.5px;
-    letter-spacing: 0.08em;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
 }
 

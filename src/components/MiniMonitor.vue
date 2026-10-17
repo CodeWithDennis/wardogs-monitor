@@ -151,11 +151,10 @@ html.mini-window body {
     padding: 0 15.5px 0 13px;
     border-bottom: 2px solid var(--accent);
     background: var(--select);
-    font-family: var(--font-title);
-    font-size: calc(12px * var(--title-scale, 1));
+    font-family: var(--font-body);
+    font-size: 12.5px;
     font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    letter-spacing: 0.01em;
 }
 
 .tab .tab-mark {

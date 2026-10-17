@@ -4,6 +4,7 @@ import { computed } from 'vue';
 import ServerCard from '@/components/ServerCard.vue';
 import SearchField from '@/components/SearchField.vue';
 import ViewHeader from '@/components/ViewHeader.vue';
+import { planLimit, realServerCount } from '@/lib/licence';
 import { loadServers, selectServer, state, toast } from '@/lib/store';
 
 /** Every saved server as a card, filtered by the sidebar's status and search. */
@@ -22,6 +23,9 @@ const servers = computed(() => {
 const players = computed(() => state.servers.reduce((sum, server) => sum + (state.lives[server.id]?.status?.players ?? 0), 0));
 const online = computed(() => state.servers.filter((server) => state.lives[server.id]?.online).length);
 
+/** "3 of 5 servers on your plan" while a limit applies (the demo server never counts). */
+const planUse = computed(() => (planLimit.value === null ? '' : ` · ${realServerCount.value} of ${planLimit.value} servers on your ${state.licence?.state === 'trial' ? 'trial' : 'plan'}`));
+
 async function addDemo(): Promise<void> {
     const server = await window.panel.servers.addDemo();
     await loadServers();
@@ -31,7 +35,7 @@ async function addDemo(): Promise<void> {
 </script>
 
 <template>
-    <ViewHeader title="Servers" :subtitle="`${online} of ${state.servers.length} online · ${players} players right now`">
+    <ViewHeader title="Servers" :subtitle="`${online} of ${state.servers.length} online · ${players} players right now${planUse}`">
         <template #actions>
             <button type="button" class="btn btn-primary" @click="state.addingServer = true"><Plus /> Add server</button>
         </template>

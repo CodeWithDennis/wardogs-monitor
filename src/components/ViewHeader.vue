@@ -54,7 +54,8 @@ const tab = defineModel<string>('tab');
     justify-content: space-between;
     gap: 26.5px;
     min-height: 75px;
-    padding-right: 132px;
+    /* The actions stay clear of the window's own buttons (see .content in Shell.vue; the header already pads 35px). */
+    padding-right: max(0px, calc(var(--caption-clear, var(--caption-w)) - 35px));
 }
 
 .title {
@@ -72,8 +73,9 @@ const tab = defineModel<string>('tab');
 
 .actions {
     display: flex;
-    gap: 9px;
-    padding-top: 4.5px;
+    flex: none;
+    gap: 10px;
+    padding-top: 2px;
 }
 
 .bar {
@@ -81,34 +83,51 @@ const tab = defineModel<string>('tab');
     align-items: flex-end;
     justify-content: space-between;
     gap: 17.5px;
+    min-width: 0;
     margin-top: 17.5px;
 }
 
+/*
+ * In a narrow window the tabs scroll sideways rather than run under the
+ * detail panel. The 1px below holds the gold underline over the header's
+ * bottom border, where it sat before.
+ */
 .tabs {
     display: flex;
     gap: 6.5px;
+    min-width: 0;
+    margin-bottom: -1px;
+    padding-bottom: 1px;
+    overflow-x: auto;
+    scrollbar-width: none;
 }
 
 .tabs button {
     position: relative;
     display: inline-flex;
     align-items: center;
-    gap: 7.5px;
+    gap: 8px;
     height: 42px;
-    padding: 0 14.5px;
+    padding: 0 14px;
     border: 0;
     background: transparent;
-    color: var(--text-2);
-    font-family: var(--font-title);
-    font-size: calc(14px * var(--title-scale, 1));
+    color: var(--muted);
+    font-family: var(--font-body);
+    font-size: 14px;
     font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    letter-spacing: 0.01em;
     white-space: nowrap;
+    transition: color 0.12s;
 }
 
 .tabs button:hover {
     color: var(--text);
+}
+
+.tabs button:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 2px var(--accent-line);
+    border-radius: var(--radius);
 }
 
 .tabs button.on {
@@ -126,12 +145,18 @@ const tab = defineModel<string>('tab');
 }
 
 .count {
+    color: var(--faint);
+    font-size: 12.5px;
+    font-weight: 500;
+}
+
+.on .count {
     color: var(--muted);
-    font-size: 13px;
 }
 
 .filters {
     display: flex;
+    flex: none;
     align-items: center;
     gap: 11px;
     padding-bottom: 6.5px;
