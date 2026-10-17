@@ -13,10 +13,10 @@ const route = ref(location.hash.replace(/^#/, ''));
 onMounted(async () => {
     window.addEventListener('hashchange', () => (route.value = location.hash.replace(/^#/, '')));
 
-    // Both windows follow the chosen theme, live.
+    // Both windows follow the chosen theme and headline font, live.
     const preferences = await window.panel.preferences.get();
-    applyTheme(preferences.theme, preferences.accent);
-    window.panel.preferences.onChange((next) => applyTheme(next.theme, next.accent));
+    applyTheme(preferences.theme, preferences.accent, preferences.titleFont);
+    window.panel.preferences.onChange((next) => applyTheme(next.theme, next.accent, next.titleFont));
 });
 </script>
 

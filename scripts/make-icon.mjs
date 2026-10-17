@@ -9,7 +9,7 @@ const svg = readFileSync(new URL('../src/assets/brand/mark.svg', import.meta.url
 const html = `<html><body style="margin:0;background:transparent">
 <div style="width:512px;height:512px;border-radius:96px;box-sizing:border-box;border:6px solid #e8b54e;
 background:radial-gradient(120% 120% at 30% 0%,#2a3566,#11162a 70%);display:grid;place-items:center">
-<img src="data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}" style="width:300px"></div></body></html>`;
+<img src="data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}" style="width:330px"></div></body></html>`;
 
 app.whenReady().then(async () => {
     const win = new BrowserWindow({ width: 512, height: 512, show: false, transparent: true, frame: false, useContentSize: true });

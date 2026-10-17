@@ -8,7 +8,12 @@ import { openView, selectedServer, selectServer, state } from '@/lib/store';
  * The top-left switcher: the open server with its status, and a list to
  * jump to another one, see them all as cards, or add one. Arrow keys and
  * Enter pick.
+ *
+ * In the compact sidebar it shrinks to a square with just the status dot,
+ * and the menu pops out to the right instead of under it.
  */
+defineProps<{ compact?: boolean }>();
+
 const open = ref(false);
 const root = ref<HTMLElement | null>(null);
 const highlighted = ref(0);
@@ -85,8 +90,17 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <div ref="root" class="switcher">
-        <button type="button" class="current" :class="{ open }" :aria-expanded="open" aria-haspopup="listbox" title="Switch server" @click="toggle">
+    <div ref="root" class="switcher" :class="{ compact }">
+        <button
+            type="button"
+            class="current"
+            :class="{ open }"
+            :aria-expanded="open"
+            aria-haspopup="listbox"
+            :aria-label="compact ? `Switch server: ${selectedServer?.name ?? 'none open'}` : undefined"
+            :title="compact ? (selectedServer?.name ?? 'Pick a server') : 'Switch server'"
+            @click="toggle"
+        >
             <span class="dot" :class="current?.dot ?? 'pending'" />
             <span class="text">
                 <span class="name truncate">{{ selectedServer?.name ?? 'Pick a server' }}</span>
@@ -95,7 +109,7 @@ onUnmounted(() => {
             <ChevronsUpDown class="chevron" />
         </button>
 
-        <Transition name="pop">
+        <Transition :name="compact ? 'pop-side' : 'pop'">
             <div v-if="open" class="menu" role="listbox" tabindex="-1" @keydown="onMenuKey">
                 <div class="menu-label">Servers</div>
                 <button
@@ -197,7 +211,7 @@ small {
     padding: 6.5px 11px 6.5px;
     color: var(--faint);
     font-family: var(--font-title);
-    font-size: 11.5px;
+    font-size: calc(11.5px * var(--title-scale, 1));
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -263,8 +277,33 @@ small {
     font-size: 14px;
 }
 
+/* Compact: a square around the status dot, centred in the narrow sidebar. */
+.compact {
+    width: 44px;
+    margin: 0 auto 22px;
+}
+
+.compact .current {
+    justify-content: center;
+    height: 44px;
+    padding: 0;
+}
+
+.compact .current .text,
+.compact .chevron {
+    display: none;
+}
+
+/* Out to the right of the strip, so it never runs off the window's edge. */
+.compact .menu {
+    top: 0;
+    left: calc(100% + 15.5px);
+}
+
 .pop-enter-active,
-.pop-leave-active {
+.pop-leave-active,
+.pop-side-enter-active,
+.pop-side-leave-active {
     transition:
         opacity 0.12s,
         transform 0.12s;
@@ -274,5 +313,11 @@ small {
 .pop-leave-to {
     opacity: 0;
     transform: translateY(-4.5px);
+}
+
+.pop-side-enter-from,
+.pop-side-leave-to {
+    opacity: 0;
+    transform: translateX(-4.5px);
 }
 </style>

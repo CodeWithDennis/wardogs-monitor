@@ -152,7 +152,7 @@ html.mini-window body {
     border-bottom: 2px solid var(--accent);
     background: var(--select);
     font-family: var(--font-title);
-    font-size: 12px;
+    font-size: calc(12px * var(--title-scale, 1));
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -215,7 +215,7 @@ html.mini-window body {
 
 .map {
     font-family: var(--font-title);
-    font-size: 17.5px;
+    font-size: calc(17.5px * var(--title-scale, 1));
     line-height: 1.2;
 }
 

@@ -82,9 +82,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
 <template>
     <div class="shell">
         <IconRail />
-        <Transition name="slide">
-            <Sidebar v-if="!state.preferences.sidebarCollapsed" />
-        </Transition>
+        <Sidebar />
 
         <template v-if="state.ready">
             <main v-if="showView" class="content" :class="{ wide }">
@@ -127,19 +125,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
 
 .content.wide {
     border-right: 0;
-}
-
-.slide-enter-active,
-.slide-leave-active {
-    transition:
-        margin 0.18s ease,
-        opacity 0.18s ease;
-}
-
-.slide-enter-from,
-.slide-leave-to {
-    margin-left: calc(var(--side-w) * -1);
-    opacity: 0;
 }
 
 .boot {

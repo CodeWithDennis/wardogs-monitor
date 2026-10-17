@@ -62,7 +62,7 @@ withDefaults(defineProps<{ factions: Faction[]; compact?: boolean }>(), { compac
 
 .score {
     font-family: var(--font-title);
-    font-size: 24px;
+    font-size: calc(24px * var(--title-scale, 1));
     font-weight: 600;
     line-height: 1;
     color: color-mix(in srgb, var(--faction) 55%, white);

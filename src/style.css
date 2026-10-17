@@ -1,10 +1,23 @@
 @import '@fontsource/inter/400.css';
 @import '@fontsource/inter/500.css';
 @import '@fontsource/inter/600.css';
+@import '@fontsource/barlow-condensed/500.css';
+@import '@fontsource/barlow-condensed/600.css';
+@import '@fontsource/barlow-condensed/700.css';
+@import '@fontsource/barlow-condensed/800.css';
+@import '@fontsource/teko/500.css';
+@import '@fontsource/teko/600.css';
+@import '@fontsource/teko/700.css';
+@import '@fontsource/saira-stencil-one/400.css';
+@import '@fontsource/russo-one/400.css';
+@import '@fontsource/black-ops-one/400.css';
 
 /*
- * Oxanium for headlines and labels (heavy, blocky letters with chamfered
- * corners) and Inter for body text. Oxanium carries the site's metric overrides so uppercase
+ * Inter for body text, and a headline font for titles, buttons and labels
+ * that people pick under Options > Appearance (FONTS in src/lib/themes.ts sets
+ * --font-title). Barlow Condensed is the default, the website's stand-in for
+ * its DIN Condensed brand face. Oxanium is self-hosted below instead of from
+ * Fontsource because it carries the site's metric overrides, so uppercase
  * labels sit centred next to their icons.
  */
 @font-face {
@@ -94,10 +107,20 @@
     --side-w: 273px;
     --detail-w: 409px;
 
-    --font-title: 'Oxanium', 'Barlow Condensed', Impact, sans-serif;
+    --font-title: 'Barlow Condensed', Impact, sans-serif;
+    /* How much bigger the wordmark is set, as condensed fonts read smaller. */
+    --title-scale: 1.12;
     --font-body: 'Inter', 'Segoe UI', system-ui, sans-serif;
 
     color-scheme: dark;
+}
+
+/*
+ * Saira Stencil One, Russo One and Black Ops One come in one weight, so stop
+ * the browser smearing a fake bold over them wherever a headline asks for 600+.
+ */
+:root:is([data-font='saira-stencil'], [data-font='russo-one'], [data-font='black-ops-one']) {
+    font-synthesis-weight: none;
 }
 
 * {
@@ -198,7 +221,7 @@ a {
 .label-caps {
     font-family: var(--font-title);
     font-weight: 600;
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--title-scale, 1));
     letter-spacing: 0.1em;
     text-transform: uppercase;
 }
@@ -262,7 +285,7 @@ a {
     background: var(--raise);
     color: var(--text);
     font-family: var(--font-title);
-    font-size: 13px;
+    font-size: calc(13px * var(--title-scale, 1));
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -432,7 +455,7 @@ a {
 
 .field-label {
     font-family: var(--font-title);
-    font-size: 12px;
+    font-size: calc(12px * var(--title-scale, 1));
     font-weight: 600;
     color: var(--muted);
     letter-spacing: 0.1em;
@@ -489,7 +512,7 @@ a {
     border-bottom: 1px solid var(--line);
     color: var(--muted);
     font-family: var(--font-title);
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--title-scale, 1));
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -624,7 +647,7 @@ a {
     background: transparent;
     color: var(--muted);
     font-family: var(--font-title);
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--title-scale, 1));
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
