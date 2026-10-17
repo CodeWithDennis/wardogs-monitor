@@ -35,19 +35,27 @@ function review(): void {
 </template>
 
 <style scoped>
+/*
+ * When it runs to the window's right edge (.clear), Windows draws its own
+ * minimise, maximise and close buttons over its end, so it keeps that
+ * corner clear, like the licence banner (--caption-clear is set on
+ * .content in Shell.vue).
+ */
 .banner {
     display: flex;
     flex: none;
     align-items: center;
     gap: 12px;
-    padding: 10px 22px 10px 32px;
+    min-height: 50px;
+    padding: 8px max(16px, var(--caption-clear, var(--caption-w))) 8px 35px;
     border-bottom: 1px solid var(--accent-line);
     background: var(--accent-soft);
-    font-size: 13.5px;
+    font-size: 14px;
+    line-height: 1.4;
 }
 
 .banner.clear {
-    padding-right: 154px;
+    padding-right: var(--caption-w);
 }
 
 .banner span {
@@ -64,8 +72,9 @@ function review(): void {
 .close {
     display: grid;
     place-items: center;
-    width: 28.5px;
-    height: 28.5px;
+    width: 30px;
+    height: 30px;
+    flex: none;
     border: 0;
     border-radius: var(--radius);
     background: transparent;

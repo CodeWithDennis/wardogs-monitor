@@ -86,7 +86,7 @@ const licenceText = computed(() => {
         return '';
     }
 
-    return licence.state === 'licensed' ? 'Licensed' : licence.state === 'trial' ? `Trial · ${licence.trialDaysLeft}d left` : 'Trial ended';
+    return licence.state === 'licensed' ? 'Licensed' : licence.state === 'trial' ? `Trial · ${licence.trialDaysLeft}d left` : licence.reason === 'trial' ? 'Trial ended' : licence.reason === 'offline' ? 'Check needed' : 'Licence ended';
 });
 
 const licenceTone = computed(() => (state.licence?.state === 'licensed' ? 'ok' : state.licence?.state === 'trial' ? 'gold' : 'bad'));
@@ -261,11 +261,12 @@ function playersOnline(serverId: string): string {
     color: var(--accent);
 }
 
+/* The tagline under the wordmark, widely spaced as part of the lockup. */
 .brand p {
     margin: 10px 0 0;
     color: var(--accent);
-    font-size: 11.5px;
-    letter-spacing: 0.22em;
+    font-size: 10.5px;
+    letter-spacing: 0.2em;
     white-space: nowrap;
 }
 
@@ -348,12 +349,12 @@ function playersOnline(serverId: string): string {
 }
 
 .quick-label {
-    padding: 0 24px 6.5px;
+    padding: 0 24px 8px;
     color: var(--faint);
-    font-family: var(--font-title);
-    font-size: calc(11.5px * var(--title-scale, 1));
+    font-family: var(--font-body);
+    font-size: 11.5px;
     font-weight: 600;
-    letter-spacing: 0.12em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
     white-space: nowrap;
 }
@@ -507,8 +508,8 @@ function playersOnline(serverId: string): string {
 }
 
 .beta {
-    height: 21px;
-    font-size: 11.5px;
-    letter-spacing: 0.08em;
+    height: 22px;
+    font-size: 12px;
+    font-weight: 500;
 }
 </style>

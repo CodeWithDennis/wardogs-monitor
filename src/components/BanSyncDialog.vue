@@ -29,7 +29,7 @@ const serverName = (id: string | null | undefined) => (id ? (state.servers.find(
 </script>
 
 <template>
-    <Modal :open="preview !== null" :title="plan ? `Sync “${plan.groupName}”` : 'Sync ban lists'" :width="572" @close="closeSyncPreview">
+    <Modal :open="preview !== null" :title="plan ? `Sync “${plan.groupName}”` : 'Sync ban lists'" :width="520" @close="closeSyncPreview">
         <div v-if="preview?.loading" class="loading">
             <div v-for="i in 3" :key="i" class="skeleton" style="height: 44px" />
         </div>

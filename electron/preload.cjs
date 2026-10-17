@@ -42,6 +42,7 @@ contextBridge.exposeInMainWorld('panel', {
     license: {
         status: invoke('license:status'),
         activate: invoke('license:activate'),
+        check: invoke('license:check'),
         remove: invoke('license:remove'),
         onChange: listen('license:changed'),
     },

@@ -349,7 +349,7 @@ function unban(entry: Ban): void {
     flex-direction: column;
     align-items: center;
     gap: 13px;
-    padding: 50.5px 0 20px;
+    padding: calc(var(--caption-h) + 16.5px) 0 20px;
     cursor: pointer;
     transition: background 0.12s;
     animation: strip-in 0.22s ease;
@@ -364,7 +364,7 @@ function unban(entry: Ban): void {
     top: 0;
     right: 0;
     left: 0;
-    height: 46px;
+    height: calc(var(--caption-h) + 12px);
 }
 
 .strip-rule {
@@ -423,9 +423,10 @@ function unban(entry: Ban): void {
     inset: 0;
 }
 
+/* Just under the window's own buttons, which sit over the panel's top-right corner. */
 .hero-buttons {
     position: absolute;
-    top: 46px;
+    top: calc(var(--caption-h) + 12px);
     right: 15.5px;
     left: 0;
     height: 44px;

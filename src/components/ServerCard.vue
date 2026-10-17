@@ -4,6 +4,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import FactionScores from '@/components/FactionScores.vue';
 import MapArt from '@/components/MapArt.vue';
 import { ago, formatUptime, modeName, percent } from '@/lib/format';
+import { BILLING_URL, openBilling } from '@/lib/licence';
 import { mapName } from '@/lib/maps';
 import { now, removeServer, selectServer, state } from '@/lib/store';
 import type { SavedServer } from '@/types';
@@ -104,10 +105,13 @@ onUnmounted(() => document.removeEventListener('mousedown', onDocument));
                 <FactionScores :factions="status.factions" compact class="scores" />
             </template>
 
-            <div v-else-if="live" class="down">
-                <component :is="live.locked ? Lock : WifiOff" />
-                <span>{{ live.error }}</span>
-            </div>
+            <template v-else-if="live">
+                <div class="down">
+                    <component :is="live.locked ? Lock : WifiOff" />
+                    <span>{{ live.error }}</span>
+                </div>
+                <button v-if="live.lockedBy === 'plan' && BILLING_URL" type="button" class="btn btn-primary btn-sm upgrade" @click.stop="openBilling">Upgrade</button>
+            </template>
 
             <template v-else>
                 <div class="skeleton" style="height: 14px; width: 70%" />
@@ -144,7 +148,9 @@ onUnmounted(() => document.removeEventListener('mousedown', onDocument));
 }
 
 .server-card:focus-visible {
-    outline: 1px solid var(--accent);
+    outline: none;
+    border-color: var(--accent-line);
+    box-shadow: 0 0 0 2px var(--accent-line);
 }
 
 .art-wrap {
@@ -190,26 +196,26 @@ onUnmounted(() => document.removeEventListener('mousedown', onDocument));
     top: calc(100% + 6.5px);
     right: 0;
     width: 215.5px;
-    padding: 5.5px;
-    border: 1px solid var(--line);
-    border-top: 1px solid var(--accent-line);
-    border-radius: var(--radius);
+    padding: 5px;
+    border: 1px solid var(--pop-line);
+    border-top-color: var(--accent-line);
+    border-radius: var(--radius-pop);
     background: var(--panel);
-    box-shadow: 0 20px 48.5px rgb(0 0 0 / 0.5);
+    box-shadow: var(--shadow-pop);
 }
 
 .menu button {
     display: flex;
     align-items: center;
-    gap: 11px;
+    gap: 10px;
     width: 100%;
-    height: 37.5px;
-    padding: 0 11px;
+    height: 34px;
+    padding: 0 10px;
     border: 0;
     border-radius: var(--radius);
     background: transparent;
     color: var(--text-2);
-    font-size: 14.5px;
+    font-size: 14px;
     text-align: left;
 }
 
@@ -219,13 +225,19 @@ onUnmounted(() => document.removeEventListener('mousedown', onDocument));
 }
 
 .menu button svg {
-    width: 15.5px;
-    height: 15.5px;
+    width: 16px;
+    height: 16px;
+    flex: none;
     color: var(--muted);
 }
 
+.menu button:hover svg {
+    color: var(--text-2);
+}
+
 .menu .bad,
-.menu .bad svg {
+.menu .bad svg,
+.menu .bad:hover svg {
     color: var(--bad);
 }
 
@@ -236,7 +248,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onDocument));
 
 .divider {
     height: 1px;
-    margin: 5.5px 4.5px;
+    margin: 5px 4px;
     background: var(--line-soft);
 }
 
@@ -302,6 +314,10 @@ onUnmounted(() => document.removeEventListener('mousedown', onDocument));
     flex: none;
     margin-top: 2px;
     color: var(--bad);
+}
+
+.upgrade {
+    margin-top: 12px;
 }
 
 .foot {
