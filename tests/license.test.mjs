@@ -79,11 +79,11 @@ test('a key carries the plan\'s server limit; older keys without it are unlimite
     assert.equal(legacy.licence.servers, null);
 });
 
-test('maxServers follows the state: 10 in the trial, the plan when licensed, 0 when locked', () => {
+test('maxServers follows the state: unlimited in the trial, the plan when licensed, 0 when locked', () => {
     const basic = { v: 1, id: 'x', name: 'Jane', email: 'j@example.com', plan: 'basic', servers: 3, issued: '2026-01-01', expires: '2026-12-31' };
     const at = (licence, now, extra = {}) => licenceStatus({ licence, trialStartedAt: '2026-10-01T12:00:00Z', trialDays: 14, now: new Date(now), ...extra });
 
-    assert.equal(at(null, '2026-10-05T12:00:00Z').maxServers, 10);
+    assert.equal(at(null, '2026-10-05T12:00:00Z').maxServers, null);
     assert.equal(at(null, '2026-10-20T12:00:00Z').maxServers, 0);
     assert.equal(at(basic, '2026-11-01').maxServers, 3);
     assert.equal(at({ ...basic, servers: null }, '2026-11-01').maxServers, null);

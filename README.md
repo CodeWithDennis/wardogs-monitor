@@ -42,7 +42,7 @@
 - **Watchlist**: star a player to get a Windows notification whenever they join any server, with a note on why you watch them.
 - **Alerts**: a notification when a server goes down or comes back.
 - **Linked ban lists**: link servers into one shared ban list (Options → Ban lists). On start, or with Sync, the app shows what differs per server and adds the missing bans only after you confirm; unbans made in the app apply to every linked server.
-- **Plans**: Basic (3 servers), Clan (5), Community (10) or Alliance (unlimited), monthly or yearly. The limit comes from the signed key; extra servers lock after a downgrade, never deleted. The trial allows 10 servers.
+- **Licence**: one plan, €9.99 a month or €99 a year, with unlimited servers on up to 3 PCs. The key carries the limits, so the app enforces them offline too. The 14-day trial is unlimited.
 - **Mini monitor**: a small always-on-top window with the map, score race and player count, to keep over the game.
 - **Activity log**: every action taken from the app, per server, with failures.
 - **Themes**: 24 themes (Midnight by default, plus Carbon, Graphite, Blackout, Nord, Dracula, Gruvbox, Tokyo Night and more) and four accent colours. Zoom with Ctrl + / Ctrl − / Ctrl 0 or Ctrl + mouse wheel.
