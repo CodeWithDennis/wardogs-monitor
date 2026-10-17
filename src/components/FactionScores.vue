@@ -15,7 +15,7 @@ withDefaults(defineProps<{ factions: Faction[]; compact?: boolean }>(), { compac
                     >{{ faction.score }}<span class="of">/{{ SCORE_TARGET }}</span></span
                 >
             </div>
-            <div class="bar"><span :style="{ width: `${Math.min(100, (faction.score / SCORE_TARGET) * 100)}%` }" /></div>
+            <div class="bar"><span :style="{ '--fill': Math.min(1, faction.score / SCORE_TARGET) }" /></div>
             <div v-if="!compact" class="meta muted">
                 <span class="num">{{ faction.players }} players</span>
                 <span class="num">${{ faction.cash.toLocaleString('en-GB') }} cash</span>
@@ -92,12 +92,16 @@ withDefaults(defineProps<{ factions: Faction[]; compact?: boolean }>(), { compac
     height: 4.5px;
 }
 
+/* The fill grows by scaling, which the GPU animates without repainting the page every frame. */
 .bar span {
     position: absolute;
     inset: 0 auto 0 0;
+    width: 100%;
     border-radius: 3.5px;
     background: linear-gradient(90deg, color-mix(in srgb, var(--faction) 55%, transparent), var(--faction));
-    transition: width 0.8s ease;
+    transform: scaleX(var(--fill, 0));
+    transform-origin: left center;
+    transition: transform 0.8s ease;
 }
 
 .meta {

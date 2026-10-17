@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Map as MapIcon, RotateCcw, SkipForward } from 'lucide-vue-next';
+import { LoaderCircle, Map as MapIcon, RotateCcw, SkipForward } from 'lucide-vue-next';
 import { computed, onMounted, ref } from 'vue';
 import MapArt from '@/components/MapArt.vue';
 import MapPicker from '@/components/MapPicker.vue';
@@ -50,7 +50,19 @@ function changeMap(): void {
     <ViewHeader title="Match" subtitle="End, restart, or send everyone to another map" />
 
     <div class="view-body narrow">
-        <section v-if="status">
+        <section v-if="!live" aria-busy="true" aria-label="Loading the match">
+            <div class="section-label"><span>Playing now</span></div>
+            <div class="card now">
+                <div class="skeleton thumb" />
+                <div class="now-text grow">
+                    <div class="skeleton" style="height: 24px; width: 45%" />
+                    <div class="skeleton" style="height: 22px; width: 70%; margin-top: 14px" />
+                    <div class="skeleton" style="height: 36px; width: 60%; margin-top: auto" />
+                </div>
+            </div>
+        </section>
+
+        <section v-else-if="status">
             <div class="section-label">
                 <span>Playing now</span>
                 <span v-if="status.rotationNow !== null" class="muted">rotation #{{ status.rotationNow + 1 }}</span>
@@ -66,8 +78,8 @@ function changeMap(): void {
                         <span v-if="status.zone" class="pill">{{ zoneName(status.zone) }}</span>
                     </div>
                     <div class="now-actions">
-                        <button type="button" class="btn" :disabled="busy.restartMatch" @click="restartMatch"><RotateCcw /> Restart match</button>
-                        <button type="button" class="btn" :disabled="busy.endMatch" @click="endMatch"><SkipForward /> End match</button>
+                        <button type="button" class="btn" :disabled="busy.restartMatch" @click="restartMatch"><LoaderCircle v-if="busy.restartMatch" class="spin" /><RotateCcw v-else /> Restart match</button>
+                        <button type="button" class="btn" :disabled="busy.endMatch" @click="endMatch"><LoaderCircle v-if="busy.endMatch" class="spin" /><SkipForward v-else /> End match</button>
                     </div>
                 </div>
             </div>
@@ -84,7 +96,7 @@ function changeMap(): void {
                 <MapPicker v-model="choice" :catalog="catalog" />
                 <div class="go">
                     <span class="muted truncate">{{ summary }}</span>
-                    <button type="button" class="btn btn-primary btn-lg" :disabled="!choice.map || busy.changeMap || !live?.online" @click="changeMap"><MapIcon /> Change map</button>
+                    <button type="button" class="btn btn-primary btn-lg" :disabled="!choice.map || busy.changeMap || !live?.online" @click="changeMap"><LoaderCircle v-if="busy.changeMap" class="spin" /><MapIcon v-else /> Change map</button>
                 </div>
             </template>
             <template v-else>
@@ -115,6 +127,10 @@ function changeMap(): void {
     min-width: 0;
 }
 
+.grow {
+    flex: 1;
+}
+
 .now-text .title {
     font-size: 23px;
     font-weight: 700;
@@ -129,6 +145,7 @@ function changeMap(): void {
 
 .now-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 9px;
     margin-top: auto;
     padding-top: 17.5px;
@@ -145,11 +162,28 @@ function changeMap(): void {
 
 .go {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 17.5px;
     margin-top: 24px;
     padding-top: 20px;
     border-top: 1px solid var(--line-soft);
+}
+
+/* A narrow page: the picture sits above the match, and the summary above the button. */
+@container page (max-width: 640px) {
+    .now {
+        flex-direction: column;
+    }
+
+    .thumb {
+        width: 100%;
+        height: 120px;
+    }
+
+    .go .btn {
+        flex: 1 1 100%;
+    }
 }
 </style>

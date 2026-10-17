@@ -61,6 +61,9 @@ export function live(serverId) {
     });
 }
 
+/** Sorts players by name like localeCompare with base sensitivity, without building a collator per comparison. */
+const byName = new Intl.Collator(undefined, { sensitivity: 'base' });
+
 /** @internal exported for tests */
 export function normaliseLive(status, players, health, checkedAt) {
     const factionColors = Object.fromEntries((status.factionScores ?? []).map((faction) => [faction.name, faction.colorHex]));
@@ -76,7 +79,7 @@ export function normaliseLive(status, players, health, checkedAt) {
             cash: Number(player.cash ?? 0),
             pingMs: Number(player.pingMs ?? 0),
         }))
-        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+        .sort((a, b) => byName.compare(a.name, b.name));
 
     const tick = status.scoreTick ?? null;
 

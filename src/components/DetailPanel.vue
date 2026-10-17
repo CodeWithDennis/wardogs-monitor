@@ -2,12 +2,13 @@
 import { Copy, ExternalLink, Star, Megaphone, MessageSquare, PanelRightClose, PanelRightOpen, PictureInPicture2, RefreshCw, Shuffle, Skull, UserX, Ban as BanIcon, X } from 'lucide-vue-next';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import MapArt from '@/components/MapArt.vue';
-import { ago, dateTime, formatUptime, gameName, modeName, modifierNames, number, percent, pingLevel, ratio, steamProfileUrl, zoneName } from '@/lib/format';
+import TimeAgo from '@/components/TimeAgo.vue';
+import { dateTime, formatUptime, gameName, modeName, modifierNames, number, percent, pingLevel, ratio, steamProfileUrl, zoneName } from '@/lib/format';
 import { mapName } from '@/lib/maps';
 import { killPlayer, openPlayerAction } from '@/lib/playerActions';
 import { liftBan } from '@/lib/banlists';
 import { isWatched, setWatchNote, toggleWatch, watchedEntry } from '@/lib/watchlist';
-import { now, openMini, openView, refreshLive, selectedLive, selectedServer, state, toast, togglePanel } from '@/lib/store';
+import { openMini, openView, refreshLive, selectedLive, selectedServer, state, toast, togglePanel } from '@/lib/store';
 import type { Ban } from '@/types';
 
 /**
@@ -38,8 +39,9 @@ watch(
     { immediate: true },
 );
 
+// Separate sources, so this only runs when one of them changes, not on every reading.
 watch(
-    () => [state.selectedId, live.value?.online, status.value?.rotationNext, status.value?.map] as const,
+    [() => state.selectedId, () => live.value?.online, () => status.value?.rotationNext, () => status.value?.map],
     async ([serverId, online]) => {
         if (!serverId || !online) {
             nextEntry.value = null;
@@ -181,7 +183,7 @@ function unban(entry: Ban): void {
                         <span>K/D {{ ratio(player.kills, player.deaths) }}</span>
                         <span class="num">{{ player.kills }} / {{ player.deaths }}</span>
                     </div>
-                    <div class="progress"><span :style="{ width: `${percent(player.kills, player.kills + player.deaths || 1)}%` }" /></div>
+                    <div class="progress"><span :style="{ '--fill': percent(player.kills, player.kills + player.deaths || 1) / 100 }" /></div>
 
                     <dl class="kv facts">
                         <dt>Kills</dt>
@@ -268,7 +270,7 @@ function unban(entry: Ban): void {
                             <span>Players · {{ status.players }} of {{ status.maxPlayers }}</span>
                             <span class="num">{{ fill }}%</span>
                         </div>
-                        <div class="progress"><span :style="{ width: `${fill}%` }" /></div>
+                        <div class="progress"><span :style="{ '--fill': fill / 100 }" /></div>
 
                         <dl class="kv facts">
                             <dt>Server</dt>
@@ -289,13 +291,13 @@ function unban(entry: Ban): void {
                             </dd>
                         </dl>
 
-                        <p class="by muted">{{ selectedServer?.host }}:{{ selectedServer?.port }} · checked {{ ago(live.checkedAt, now) }}</p>
+                        <p class="by muted">{{ selectedServer?.host }}:{{ selectedServer?.port }} · checked <TimeAgo :at="live.checkedAt" /></p>
                     </template>
 
                     <template v-else-if="live && !live.online">
                         <div class="pills"><span class="pill pill-bad">Offline</span></div>
                         <p class="offline">{{ live.error }}</p>
-                        <p class="by muted">{{ selectedServer?.host }}:{{ selectedServer?.port }} · checked {{ ago(live.checkedAt, now) }}</p>
+                        <p class="by muted">{{ selectedServer?.host }}:{{ selectedServer?.port }} · checked <TimeAgo :at="live.checkedAt" /></p>
                         <p class="muted small">Restart the server from your host's panel if it is down. This app retries on its own.</p>
                     </template>
 
@@ -592,8 +594,15 @@ function unban(entry: Ban): void {
     margin-top: 20px;
 }
 
+/* Spins only when a reading takes a moment, so the quick one every few seconds never makes it twitch. */
 .spinning svg {
-    animation: spin 0.8s linear infinite;
+    animation: spin 0.8s linear 0.35s infinite;
+}
+
+/* Switching between the server, a player and a ban fades the new one in. */
+.full > .hero,
+.full > .body {
+    animation: view-fade 0.15s ease-out both;
 }
 
 @keyframes spin {

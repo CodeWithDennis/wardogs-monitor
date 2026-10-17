@@ -225,6 +225,31 @@ export interface Preferences {
     notifyWatched: boolean;
     watchlist: WatchedPlayer[];
     broadcasts: string[];
+    /** The window's X hides it to the tray instead of quitting. */
+    closeToTray: boolean;
+    /** Minimising hides the window to the tray instead of the taskbar. */
+    minimizeToTray: boolean;
+    /** Open hidden in the tray. */
+    startMinimized: boolean;
+    /** Start with Windows, hidden in the tray. */
+    launchAtLogin: boolean;
+}
+
+/** The open theme's colours, which the next start paints its first frame in. */
+export interface BootColors {
+    bg: string;
+    text: string;
+    muted: string;
+    accent: string;
+}
+
+/** One server as the tray icon's tooltip and menu show it. */
+export interface TrayServer {
+    id: string;
+    name: string;
+    state: 'online' | 'offline' | 'locked' | 'unknown';
+    players: number;
+    maxPlayers: number;
 }
 
 export interface LicenceSubscription {
@@ -306,10 +331,19 @@ export interface PanelApi {
         open(serverId: string): Promise<void>;
         close(): Promise<void>;
         onServer(callback: (serverId: string) => void): () => void;
+        /** The mini monitor opened, maybe from the tray menu. */
+        onOpened(callback: () => void): () => void;
         onClosed(callback: () => void): () => void;
     };
+    /** Show the main window, from the tray or minimised if need be. */
     focusMain(): Promise<void>;
     openExternal(url: string): Promise<void>;
+    rememberBootColors(colors: BootColors): Promise<void>;
+    tray: {
+        summary(value: { selectedId: string | null; servers: TrayServer[] }): void;
+        onOpenServer(callback: (serverId: string) => void): () => void;
+        onOpenLicence(callback: () => void): () => void;
+    };
 }
 
 declare global {

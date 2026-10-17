@@ -46,8 +46,9 @@ const sidebarStyle = computed(() => (width.value && !compact.value ? { width: `$
 const bansCount = ref<number | null>(null);
 const rotationCount = ref<number | null>(null);
 
+// Separate sources, so the counts are read again only when one of them changes, not on every reading.
 watch(
-    () => [state.selectedId, state.revision, selectedLive.value?.online] as const,
+    [() => state.selectedId, () => state.revision, () => selectedLive.value?.online],
     async ([serverId, , online]) => {
         if (!serverId || !online) {
             bansCount.value = null;

@@ -221,10 +221,17 @@ function describe(entry: RotationEntry): string {
             <SaveBar :show="dirty || !!saveError" :saving="saving" :error="saveError" note="Unsaved rotation. It applies from the next match." @save="save" @discard="load" />
         </template>
 
-        <template v-else>
-            <div class="skeleton" style="height: 60px" />
-            <div v-for="i in 4" :key="i" class="skeleton" style="height: 58px; margin-top: 8px" />
-        </template>
+        <div v-else aria-busy="true" aria-label="Loading the rotation">
+            <div class="skeleton" style="height: 62px" />
+            <div class="skeleton" style="height: 12px; width: 90px; margin-top: 33px" />
+            <div v-for="i in 4" :key="i" class="entry skeleton-entry">
+                <div class="skeleton" style="width: 81.5px; height: 46px" />
+                <div class="grow">
+                    <div class="skeleton" style="height: 15px" :style="{ width: `${40 + i * 7}%` }" />
+                    <div class="skeleton" style="height: 11px; width: 30%; margin-top: 8px" />
+                </div>
+            </div>
+        </div>
     </div>
 
     <Modal :open="editing !== null" :title="editing?.index === null ? 'Add a match' : 'Change match'" :width="640" @close="editing = null">
@@ -239,6 +246,7 @@ function describe(entry: RotationEntry): string {
 <style scoped>
 .controls {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 17.5px;
@@ -394,5 +402,35 @@ function describe(entry: RotationEntry): string {
 .tools svg {
     width: 15.5px;
     height: 15.5px;
+}
+
+.skeleton-entry {
+    cursor: default;
+    padding-left: 41px;
+}
+
+.skeleton-entry:hover {
+    background: transparent;
+}
+
+.grow {
+    flex: 1;
+    min-width: 0;
+}
+
+/* A narrow page: no picture or drag handle, so the match's name keeps its room. */
+@container page (max-width: 560px) {
+    .entry .thumb,
+    .grip {
+        display: none;
+    }
+
+    .skeleton-entry {
+        padding-left: 6.5px;
+    }
+
+    .name {
+        flex-wrap: wrap;
+    }
 }
 </style>
