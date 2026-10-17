@@ -212,9 +212,11 @@ export async function captureViews({ app, mainWindow, openWidget, getWidget, dir
     console.log('[capture] licence after activating:', await run(`window.panel.license.status().then((s) => s.state)`));
     await shot('23-licensed');
 
-    // Window sizes: from the smallest the window allows up.
+    // Window sizes: from the smallest the window allows up. In front, so each size paints before it is captured.
+    mainWindow.show();
+    mainWindow.focus();
     await run(`document.querySelector('[data-section="control"]')?.click()`);
-    await wait(500);
+    await wait(800);
 
     for (const [width, height] of [[1360, 640], [1440, 900], [2560, 1400]]) {
         mainWindow.unmaximize();
@@ -224,6 +226,8 @@ export async function captureViews({ app, mainWindow, openWidget, getWidget, dir
         for (const view of ['overview', 'players']) {
             await run(`document.querySelector('[data-view="${view}"]')?.click()`);
             await wait(1400);
+            mainWindow.webContents.invalidate();
+            await wait(200);
             await shot(`50-${width}x${height}-${view}`);
         }
     }
