@@ -311,9 +311,15 @@ function int(field: keyof ServerSettings, event: Event): void {
             <SaveBar :show="dirty || !!saveError" :saving="saving" :error="saveError" @save="save" @discard="load" />
         </form>
 
-        <template v-else>
-            <div v-for="i in 3" :key="i" class="skeleton" style="height: 64px; margin-bottom: 16px" />
-        </template>
+        <div v-else class="form" aria-busy="true" aria-label="Loading the settings">
+            <div v-for="i in 4" :key="i" class="group">
+                <div>
+                    <div class="skeleton" style="height: 15px" :style="{ width: `${45 + ((i * 13) % 30)}%` }" />
+                    <div class="skeleton" style="height: 11px; width: 85%; margin-top: 9px" />
+                </div>
+                <div class="skeleton" style="height: 39px" />
+            </div>
+        </div>
     </div>
 </template>
 
@@ -415,5 +421,19 @@ function int(field: keyof ServerSettings, event: Event): void {
     border-radius: var(--radius);
     object-fit: contain;
     align-self: start;
+}
+
+/* A narrow page: each setting's explanation sits above its fields. */
+@container page (max-width: 720px) {
+    .group {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 13px;
+    }
+}
+
+@container page (max-width: 480px) {
+    .pair {
+        grid-template-columns: minmax(0, 1fr);
+    }
 }
 </style>

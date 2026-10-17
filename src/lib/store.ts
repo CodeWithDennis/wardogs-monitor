@@ -1,4 +1,4 @@
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, markRaw, reactive, ref, watch } from 'vue';
 import type { ActionResult, LicenceStatus, Limits, Live, Player, Preferences, SavedServer } from '@/types';
 
 /** A player who was on a server and is gone now, kept so they can still be banned or watched. */
@@ -81,6 +81,10 @@ export const state = reactive({
         notifyWatched: true,
         watchlist: [],
         broadcasts: [],
+        closeToTray: true,
+        minimizeToTray: false,
+        startMinimized: false,
+        launchAtLogin: false,
     } as Preferences,
     limits: null as Limits | null,
     version: '0.1.0',
@@ -167,11 +171,19 @@ export function answerConfirm(answer: boolean | 'alternative'): void {
 
 // Servers and live readings -------------------------------------------------
 
+/** Readings in flight per server, and the newest one asked for, so an older answer never overwrites a newer one. */
+const inFlight: Record<string, number> = {};
+const newestRequest: Record<string, number> = {};
+let requestCount = 0;
+
 export async function refreshLive(serverId: string, force = false): Promise<void> {
     if (state.loading[serverId] && !force) {
         return;
     }
 
+    const request = ++requestCount;
+    newestRequest[serverId] = request;
+    inFlight[serverId] = (inFlight[serverId] ?? 0) + 1;
     state.loading[serverId] = true;
 
     try {
@@ -179,19 +191,64 @@ export async function refreshLive(serverId: string, force = false): Promise<void
             await window.panel.server.refresh(serverId);
         }
 
-        const live = await window.panel.server.live(serverId);
+        const answer = await window.panel.server.live(serverId);
+
+        // A refresh was asked for while this one was on its way: its answer is newer.
+        if (newestRequest[serverId] !== request) {
+            return;
+        }
+
         const previous = state.lives[serverId];
+        const live = shareUnchanged(previous, answer);
         state.lives[serverId] = live;
         noticeChanges(serverId, previous, live);
 
         if (live.online && live.status) {
             const points = state.history[serverId] ?? [];
-            points.push({ at: Date.now(), players: live.status.players });
-            state.history[serverId] = points.slice(-HISTORY_POINTS);
+            const next = points.slice(1 - HISTORY_POINTS);
+            next.push({ at: Date.now(), players: live.status.players });
+            state.history[serverId] = markRaw(next);
         }
     } finally {
-        state.loading[serverId] = false;
+        inFlight[serverId] -= 1;
+        state.loading[serverId] = inFlight[serverId] > 0;
     }
+}
+
+const sameJson = (a: unknown, b: unknown): boolean => a === b || JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * A new reading that keeps the previous one's player objects, status and
+ * factions wherever nothing changed. It is never made deeply reactive (it is
+ * replaced whole on every reading anyway), and lists and rows that see the
+ * same objects as before skip their work.
+ */
+function shareUnchanged(previous: Live | undefined, next: Live): Live {
+    if (!previous) {
+        return markRaw(next);
+    }
+
+    const before = new Map(previous.players.map((player) => [player.steamId, player]));
+    let samePlayers = previous.players.length === next.players.length;
+    const players = next.players.map((player, index) => {
+        const old = before.get(player.steamId);
+        const kept = old && old.name === player.name && old.kills === player.kills && old.deaths === player.deaths && old.cash === player.cash && old.pingMs === player.pingMs && old.faction === player.faction && old.factionColor === player.factionColor ? old : player;
+        samePlayers &&= kept === previous.players[index];
+
+        return kept;
+    });
+
+    let status = next.status;
+
+    if (status && previous.status) {
+        if (sameJson(previous.status, status)) {
+            status = previous.status;
+        } else if (sameJson(previous.status.factions, status.factions)) {
+            status = { ...status, factions: previous.status.factions };
+        }
+    }
+
+    return markRaw({ ...next, status, players: samePlayers ? previous.players : players });
 }
 
 /**
@@ -223,8 +280,13 @@ function noticeChanges(serverId: string, previous: Live | undefined, live: Live)
         .filter((player) => !now.has(player.steamId))
         .map((player) => ({ name: player.name, steamId: player.steamId, faction: player.faction, factionColor: player.factionColor, kills: player.kills, deaths: player.deaths, leftAt: Date.now() }));
 
-    const kept = (state.left[serverId] ?? []).filter((player) => !now.has(player.steamId) && !gone.some((entry) => entry.steamId === player.steamId));
-    state.left[serverId] = [...gone, ...kept].slice(0, LEFT_KEPT);
+    const earlier = state.left[serverId] ?? [];
+    const kept = earlier.filter((player) => !now.has(player.steamId) && !gone.some((entry) => entry.steamId === player.steamId));
+
+    // Only a new list when someone left or came back, so the Left tab and the palette are not redone every reading.
+    if (gone.length > 0 || kept.length !== earlier.length) {
+        state.left[serverId] = [...gone, ...kept].slice(0, LEFT_KEPT);
+    }
 
     const joined: Player[] = live.players.filter((player) => !before.has(player.steamId));
 
@@ -255,12 +317,18 @@ function notify(title: string, body: string, serverId: string, enabled: boolean)
 let pollTimer: ReturnType<typeof setTimeout> | undefined;
 let backgroundTimer: ReturnType<typeof setInterval> | undefined;
 
+/** How far apart the cards' readings start. */
+const STAGGER_MS = 120;
+const later = (ms: number) => new Promise<void>((resolve) => (ms > 0 ? setTimeout(resolve, ms) : resolve()));
+
 function schedulePoll(): void {
     clearTimeout(pollTimer);
     pollTimer = setTimeout(async () => {
         if (!document.hidden) {
             if (state.view === 'servers') {
-                await Promise.all(state.servers.map((server) => refreshLive(server.id).catch(() => undefined)));
+                // Spread over a moment, so many cards update in small steps instead of one big frame.
+                const step = Math.min(STAGGER_MS, 1200 / Math.max(1, state.servers.length));
+                await Promise.all(state.servers.map((server, index) => later(index * step).then(() => refreshLive(server.id)).catch(() => undefined)));
             } else if (state.selectedId) {
                 await refreshLive(state.selectedId).catch(() => undefined);
             }
@@ -272,7 +340,10 @@ function schedulePoll(): void {
 
 function refreshBackground(): void {
     for (const server of state.servers) {
-        if (server.id !== state.selectedId) {
+        // The open server has its own, faster poll, but that one pauses while
+        // the window is hidden (in the tray, or minimised). It is read here
+        // then, so its down/back and watched-player alerts still fire.
+        if (server.id !== state.selectedId || document.hidden) {
             refreshLive(server.id).catch(() => undefined);
         }
     }
@@ -412,6 +483,9 @@ watch(
 
 export const busy = reactive<Record<string, boolean>>({});
 
+/** Steam IDs of players being kicked or banned right now, shown fading out. */
+export const leaving = reactive(new Set<string>());
+
 /**
  * Run an action on the open server, after a confirm when asked (and the
  * preference allows), with a toast either way. Returns the result, or null
@@ -430,8 +504,17 @@ export async function act(name: string, args: Record<string, unknown> = {}, opti
 
     busy[name] = true;
 
+    // A kicked or banned player fades out at once; they come back if it fails.
+    const removing = (name === 'kick' || name === 'ban') && typeof args.steamId === 'string' ? args.steamId.trim() : null;
+    let succeeded = false;
+
+    if (removing) {
+        leaving.add(removing);
+    }
+
     try {
         const result = await window.panel.server.act(serverId, name, JSON.parse(JSON.stringify(args)));
+        succeeded = result.ok;
 
         if (result.ok) {
             if (!options.quiet) {
@@ -442,11 +525,20 @@ export async function act(name: string, args: Record<string, unknown> = {}, opti
         }
 
         state.revision++;
-        refreshLive(serverId, true);
+        const refreshed = refreshLive(serverId, true);
+
+        if (removing && result.ok) {
+            // Gone from the list with the next reading; until then it stays faded.
+            refreshed.catch(() => undefined).then(() => leaving.delete(removing));
+        }
 
         return result;
     } finally {
         busy[name] = false;
+
+        if (removing && !succeeded) {
+            leaving.delete(removing);
+        }
     }
 }
 
@@ -462,5 +554,37 @@ watch(
     () => state.view,
     () => {
         state.search = '';
+    },
+);
+
+/** How often, at most, a list filters again while someone types. */
+const SEARCH_SETTLE_MS = 120;
+
+/**
+ * The search the lists filter by: trimmed and in lower case. The first key
+ * filters at once; while typing on, the lists follow at most every 120 ms
+ * (and once more for the last key), so a long list never filters on every
+ * key. Clearing is instant.
+ */
+export const searchTerm = ref('');
+let searchTimer: ReturnType<typeof setTimeout> | null = null;
+
+watch(
+    () => state.search,
+    () => {
+        const apply = () => (searchTerm.value = state.search.trim().toLowerCase());
+
+        if (state.search === '') {
+            clearTimeout(searchTimer ?? undefined);
+            searchTimer = null;
+            apply();
+        } else if (!searchTimer) {
+            apply();
+            searchTimer = setTimeout(function settle() {
+                const before = searchTerm.value;
+                apply();
+                searchTimer = before === searchTerm.value ? null : setTimeout(settle, SEARCH_SETTLE_MS);
+            }, SEARCH_SETTLE_MS);
+        }
     },
 );

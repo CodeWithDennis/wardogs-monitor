@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { LoaderCircle } from 'lucide-vue-next';
+
 /** The bar that slides up while a form has unsaved changes. */
 defineProps<{ show: boolean; saving: boolean; note?: string; error?: string | null }>();
 const emit = defineEmits<{ save: []; discard: [] }>();
@@ -10,7 +12,7 @@ const emit = defineEmits<{ save: []; discard: [] }>();
             <span class="dot" :class="error ? 'offline' : 'pending'" />
             <span class="text" :class="{ bad: error }">{{ error || note || 'You have unsaved changes' }}</span>
             <button type="button" class="btn btn-ghost" :disabled="saving" @click="emit('discard')">Discard</button>
-            <button type="button" class="btn btn-primary" :disabled="saving" @click="emit('save')">{{ saving ? 'Saving…' : 'Save to server' }}</button>
+            <button type="button" class="btn btn-primary" :disabled="saving" @click="emit('save')"><LoaderCircle v-if="saving" class="spin" />{{ saving ? 'Saving…' : 'Save to server' }}</button>
         </div>
     </Transition>
 </template>
@@ -32,12 +34,26 @@ const emit = defineEmits<{ save: []; discard: [] }>();
 
 .text {
     flex: 1;
+    min-width: 0;
     color: var(--text-2);
     font-size: 14.5px;
 }
 
 .text.bad {
     color: var(--bad);
+}
+
+/* On a narrow page the body pads less, and the buttons wrap under the message. */
+@container page (max-width: 760px) {
+    .save-bar {
+        flex-wrap: wrap;
+        margin: 22px -20px -33px;
+        padding: 13px 20px;
+    }
+
+    .text {
+        flex-basis: calc(100% - 30px);
+    }
 }
 
 .bar-enter-active,

@@ -19,7 +19,7 @@ const picture = computed(() => mapPicture(props.map, props.lighting, props.varia
 <template>
     <div class="art" :class="{ fade }">
         <Transition name="fade" mode="out-in">
-            <img v-if="picture" :key="picture" :src="picture" alt="" draggable="false" />
+            <img v-if="picture" :key="picture" :src="picture" alt="" draggable="false" decoding="async" />
             <div v-else class="none" />
         </Transition>
     </div>

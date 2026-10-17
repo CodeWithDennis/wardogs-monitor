@@ -58,8 +58,16 @@ contextBridge.exposeInMainWorld('panel', {
         open: invoke('mini:open'),
         close: invoke('mini:close'),
         onServer: listen('mini:server'),
+        onOpened: listen('mini:opened'),
         onClosed: listen('mini:closed'),
     },
     focusMain: invoke('main:focus'),
     openExternal: invoke('external:open'),
+    rememberBootColors: invoke('boot:colors'),
+    tray: {
+        /** Fire and forget: sent after readings change, nothing to wait for. */
+        summary: (value) => ipcRenderer.send('tray:summary', value),
+        onOpenServer: listen('tray:open-server'),
+        onOpenLicence: listen('tray:open-licence'),
+    },
 });

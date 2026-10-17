@@ -28,6 +28,8 @@
       "electron/**",
       "mock/**",
       "dist/**",
+      "build/icon.png",
+      "build/tray/**",
       "brand.json",
       "package.json"
     ],

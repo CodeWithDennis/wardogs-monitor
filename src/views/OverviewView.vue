@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { Lock, Megaphone, RotateCcw, Send, SkipForward, WifiOff } from 'lucide-vue-next';
+import { LoaderCircle, Lock, Megaphone, RotateCcw, Send, SkipForward, WifiOff } from 'lucide-vue-next';
 import { computed, onMounted, ref, watch } from 'vue';
 import FactionScores from '@/components/FactionScores.vue';
 import PlayerChart from '@/components/PlayerChart.vue';
+import TimeAgo from '@/components/TimeAgo.vue';
 import ViewHeader from '@/components/ViewHeader.vue';
-import { ago, formatUptime, modeName, ratio } from '@/lib/format';
+import { formatUptime, modeName, ratio } from '@/lib/format';
 import { BILLING_URL, openBilling } from '@/lib/licence';
 import { mapName } from '@/lib/maps';
 import { openPlayerMenu } from '@/lib/playerActions';
-import { act, busy, now, openOptions, openView, selectedLive, selectedServer, state } from '@/lib/store';
+import { act, busy, openOptions, openView, selectedLive, selectedServer, state } from '@/lib/store';
 import type { ActivityEntry } from '@/types';
 
 /**
@@ -20,7 +21,7 @@ const BROADCAST_MAX = 200;
 const live = selectedLive;
 const status = computed(() => live.value?.status ?? null);
 const message = ref('');
-const activity = ref<ActivityEntry[]>([]);
+const activity = ref<ActivityEntry[] | null>(null);
 
 const topPlayers = computed(() => [...(live.value?.players ?? [])].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths).slice(0, 5));
 const history = computed(() => (state.selectedId ? state.history[state.selectedId] ?? [] : []));
@@ -62,11 +63,11 @@ function openPlayer(steamId: string): void {
     <ViewHeader :title="selectedServer?.name ?? 'Overview'">
         <template #subtitle>
             <template v-if="live?.online && status">
-                <span class="live"><span class="dot online" /> Live</span>
+                <span class="live" :class="{ updating: state.loading[state.selectedId ?? ''] }"><span class="dot online" /> Live</span>
                 · {{ mapName(status.map) }} · {{ modeName(status.experiences) }} · up {{ formatUptime(live.uptimeSeconds ?? 0) }}
             </template>
             <template v-else-if="live?.locked">Locked</template>
-            <template v-else-if="live">Offline · checked {{ ago(live.checkedAt, now) }}</template>
+            <template v-else-if="live">Offline · checked <TimeAgo :at="live.checkedAt" /></template>
             <template v-else>Connecting…</template>
         </template>
     </ViewHeader>
@@ -82,6 +83,8 @@ function openPlayer(steamId: string): void {
         </div>
 
         <template v-if="live?.online && status">
+            <div class="lead-grid">
+            <div class="lead-col">
             <section>
                 <div class="section-label">
                     <span>Match</span>
@@ -90,8 +93,8 @@ function openPlayer(steamId: string): void {
                 <div class="card card-gold match">
                     <FactionScores :factions="status.factions" />
                     <div class="match-actions">
-                        <button type="button" class="btn" :disabled="busy.restartMatch" @click="restartMatch"><RotateCcw /> Restart match</button>
-                        <button type="button" class="btn" :disabled="busy.endMatch" @click="endMatch"><SkipForward /> End match</button>
+                        <button type="button" class="btn" :disabled="busy.restartMatch" @click="restartMatch"><LoaderCircle v-if="busy.restartMatch" class="spin" /><RotateCcw v-else /> Restart match</button>
+                        <button type="button" class="btn" :disabled="busy.endMatch" @click="endMatch"><LoaderCircle v-if="busy.endMatch" class="spin" /><SkipForward v-else /> End match</button>
                         <button type="button" class="btn btn-ghost" @click="openView('match')">Change map…</button>
                     </div>
                 </div>
@@ -105,13 +108,14 @@ function openPlayer(steamId: string): void {
                 <form class="broadcast" @submit.prevent="broadcast">
                     <Megaphone class="lead-icon" />
                     <input id="broadcast" v-model="message" class="input" :maxlength="BROADCAST_MAX" placeholder="A message everyone on the server sees" />
-                    <button type="submit" class="btn btn-primary" :disabled="message.trim() === '' || busy.broadcast"><Send /> Send</button>
+                    <button type="submit" class="btn btn-primary" :disabled="message.trim() === '' || busy.broadcast"><LoaderCircle v-if="busy.broadcast" class="spin" /><Send v-else /> Send</button>
                 </form>
                 <div class="templates">
                     <button v-for="template in state.preferences.broadcasts" :key="template" type="button" class="pill template" @click="message = template">{{ template }}</button>
                     <button type="button" class="link edit-templates" @click="openOptions('broadcasts')">Edit messages</button>
                 </div>
             </section>
+            </div>
 
             <section>
                 <div class="section-label">
@@ -120,6 +124,7 @@ function openPlayer(steamId: string): void {
                 </div>
                 <PlayerChart :points="history" :max="status.maxPlayers" />
             </section>
+            </div>
 
             <div class="split">
                 <section>
@@ -148,27 +153,78 @@ function openPlayer(steamId: string): void {
                         <div v-for="entry in activity" :key="entry.at + entry.summary" class="row activity" :title="entry.error ?? entry.summary">
                             <span class="dot" :class="entry.ok ? 'online' : 'offline'" />
                             <span class="truncate grow">{{ entry.summary }}</span>
-                            <span class="muted when">{{ ago(entry.at, now) }}</span>
+                            <TimeAgo class="muted when" :at="entry.at" />
                         </div>
-                        <p v-if="activity.length === 0" class="muted none">Nothing done from this app yet.</p>
+                        <div v-if="activity === null" class="skeleton-list rows-skeleton">
+                            <div v-for="i in 3" :key="i" class="skeleton" style="height: 24px" />
+                        </div>
+                        <p v-else-if="activity.length === 0" class="muted none">Nothing done from this app yet. Kicks, bans, broadcasts and map changes show up here.</p>
                     </div>
                 </section>
             </div>
         </template>
 
-        <template v-else-if="!live">
-            <div class="skeleton" style="height: 150px" />
-            <div class="skeleton" style="height: 40px; margin-top: 28px" />
-            <div class="skeleton" style="height: 120px; margin-top: 28px" />
-        </template>
+        <div v-else-if="!live" class="lead-grid" aria-busy="true" aria-label="Loading the server">
+            <div class="lead-col">
+                <div>
+                    <div class="skeleton label-skeleton" />
+                    <div class="skeleton" style="height: 196px" />
+                </div>
+                <div>
+                    <div class="skeleton label-skeleton" />
+                    <div class="skeleton" style="height: 40px" />
+                </div>
+            </div>
+            <div>
+                <div class="skeleton label-skeleton" />
+                <div class="skeleton" style="height: 132px" />
+            </div>
+        </div>
     </div>
 </template>
 
 <style scoped>
-section + section,
-section + .split,
-.offline + section {
-    margin-top: 33px;
+/*
+ * The match, broadcast and chart stack on a normal page; a wide page puts
+ * the chart beside them. Gaps, not margins, so the two layouts share one
+ * rhythm.
+ */
+.lead-grid,
+.lead-col {
+    display: grid;
+    gap: 33px;
+    align-content: start;
+    min-width: 0;
+}
+
+.lead-grid > *,
+.lead-col > * {
+    min-width: 0;
+}
+
+@container page (min-width: 1180px) {
+    .lead-grid {
+        grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    }
+}
+
+/* On a very wide page the content stops growing, so lines stay readable. */
+.view-body > * {
+    max-width: 1500px;
+}
+
+.label-skeleton {
+    width: 120px;
+    height: 12px;
+    margin-bottom: 13px;
+}
+
+.rows-skeleton {
+    padding: 8px 15.5px;
+}
+
+.live.updating .dot {
+    animation: pulse 1.2s ease-in-out 0.4s infinite;
 }
 
 .live {
@@ -189,6 +245,7 @@ section + .split,
 
 .match-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 9px;
     margin-top: 24px;
     padding-top: 17.5px;
@@ -250,8 +307,9 @@ section + .split,
 
 .split {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(286px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(286px, 100%), 1fr));
     gap: 33px;
+    margin-top: 33px;
 }
 
 .split section + section {

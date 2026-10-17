@@ -46,3 +46,24 @@ test('zoom saved for the old, smaller layout starts over', () => {
     assert.equal(resolve({ zoom: 1.1, layoutVersion: 2 }).zoom, 1.1);
     assert.equal(change({ zoom: 1.1 }, { lastServerId: 'a' }).toStore.layoutVersion, 2);
 });
+
+test('the tray preferences start as: close to the tray, the rest off', () => {
+    const preferences = resolve({});
+
+    assert.equal(preferences.closeToTray, true);
+    assert.equal(preferences.minimizeToTray, false);
+    assert.equal(preferences.startMinimized, false);
+    assert.equal(preferences.launchAtLogin, false);
+    assert.equal(resolve({ closeToTray: 'no', launchAtLogin: 1 }).closeToTray, true);
+    assert.equal(resolve({ closeToTray: false, launchAtLogin: true }).launchAtLogin, true);
+});
+
+test('boot colours keep to #rrggbb, falling back to Midnight with gold', () => {
+    assert.deepEqual(resolve({}).bootColors, { bg: '#0e1222', text: '#ebe6d8', muted: '#868ba3', accent: '#e8b54e' });
+
+    const { bg, text, accent } = resolve({ bootColors: { bg: '#13150F', text: 'red', accent: 'url(x)' } }).bootColors;
+
+    assert.equal(bg, '#13150f');
+    assert.equal(text, '#ebe6d8');
+    assert.equal(accent, '#e8b54e');
+});

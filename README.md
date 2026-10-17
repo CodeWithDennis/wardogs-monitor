@@ -43,6 +43,7 @@
 - **Alerts**: a notification when a server goes down or comes back.
 - **Linked ban lists**: link servers into one shared ban list (Options → Ban lists). On start, or with Sync, the app shows what differs per server and adds the missing bans only after you confirm; unbans made in the app apply to every linked server.
 - **Licence**: one plan, €9.99 a month or €99 a year, with unlimited servers on up to 3 PCs. The key carries the limits, so the app enforces them offline too. The 14-day trial is unlimited.
+- **Tray**: the app lives in the notification area by the clock. Closing the window hides it there and alerts keep coming; the tray icon shows how many servers are online and how many players, and its menu opens a server, the mini monitor or quits. It can also minimise to the tray, start hidden, or start with Windows (Options → General → Background).
 - **Mini monitor**: a small always-on-top window with the map, score race and player count, to keep over the game.
 - **Activity log**: every action taken from the app, per server, with failures.
 - **Themes**: 24 themes (Midnight by default, plus Carbon, Graphite, Blackout, Nord, Dracula, Gruvbox, Tokyo Night and more) and four accent colours. Zoom with Ctrl + / Ctrl − / Ctrl 0 or Ctrl + mouse wheel.
@@ -157,11 +158,11 @@ node scripts/license/issue.mjs --name "Jane Doe" --email jane@example.com --days
 
 ## Renaming and branding
 
-The product name, tagline, licence key prefix, trial length, website and support email live in [`brand.json`](brand.json). When renaming, also change `productName` in `package.json` and the `<title>` in `index.html`.
+The product name, tagline, licence key prefix, trial length, website and support email live in [`brand.json`](brand.json). When renaming, also change `productName` in `package.json` and in `index.html` the `<title>` and the boot screen's wordmark (it paints before the app loads brand.json).
 
 The data folder (`%APPDATA%\Wardogs Monitor`) is set by `dataFolder` and stays put across renames; `previousDataFolders` lists older folders whose saved servers move over on first start.
 
-The app icon (`build/icon.png`) is rendered from `src/assets/brand/mark.svg` with `npx electron scripts/make-icon.mjs`.
+The app icon (`build/icon.png`) and the tray icons (`build/tray/`) are rendered from `src/assets/brand/mark.svg` with `npx electron scripts/make-icon.mjs`.
 
 ## How it works
 
@@ -190,6 +191,7 @@ electron/
   service.mjs               live readings, catalog, settings and actions, with caching
   store.mjs                 saved servers (DPAPI-encrypted passwords) and the activity log
   preferences.mjs           preferences, defaults and migrations
+  tray-status.mjs           the tray icon's tooltip and server list wording
   license-core.mjs          licence key signing, checking, trial maths and server limits
   license-online.mjs        the website's licence API: activate, validate, deactivate
   license.mjs               the licence, trial and device ID on this PC
@@ -198,7 +200,7 @@ scripts/
   dev.mjs                   Vite + Electron for development
   license/                  keygen.mjs and issue.mjs for selling
   screenshots.mjs, capture.mjs   screenshot mode
-  make-icon.mjs             renders build/icon.png
+  make-icon.mjs             renders build/icon.png and the tray icons in build/tray/
 src/
   App.vue, main.ts          the window (main panel or mini monitor)
   components/               shell, rail, sidebar, switcher, cards, dialogs, palette…
