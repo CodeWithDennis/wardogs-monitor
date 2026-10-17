@@ -8,7 +8,7 @@ import path from 'node:path';
  */
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export async function captureViews({ app, mainWindow, openWidget, getWidget, dir }) {
+export async function captureViews({ app, mainWindow, getWidget, dir }) {
     await mkdir(dir, { recursive: true });
     const web = mainWindow.webContents;
     web.on('console-message', (_event, level, message) => level >= 2 && console.log('[page]', message));
@@ -236,7 +236,6 @@ export async function captureViews({ app, mainWindow, openWidget, getWidget, dir
     await wait(600);
 
     // The widget picker, then one of each widget on the first server.
-    const serverId = await run(`window.panel.servers.list().then((list) => list[0].id)`);
     await click('[data-view="overview"]');
     await wait(600);
     await click('.hero-buttons .icon-btn');
@@ -254,11 +253,20 @@ export async function captureViews({ app, mainWindow, openWidget, getWidget, dir
     await run(`document.querySelector('.modal .close')?.click()`);
     await wait(400);
 
-    for (const kind of ['status', 'score', 'players', 'actions']) {
-        await openWidget(kind, serverId);
-    }
-
+    // Open every widget the way a person does: the sidebar's Widgets row, then each Open button in the picker.
+    await click('.quick .row:last-child');
+    await wait(700);
+    await run(`document.querySelectorAll('.modal .item .btn').forEach((button) => button.click())`);
     await wait(3500);
+    console.log('[capture] widgets open after clicking:', await run(`window.panel.widgets.list().then((list) => list.map((widget) => widget.kind).join(', ') || 'none')`));
+    await run(`document.querySelector('.modal .close')?.click()`);
+
+    // Where the widgets sit on screen, held a moment, so a real screen grab can check they show (not only that they paint).
+    if (process.env.PANEL_WIDGET_HOLD) {
+        const bounds = Object.fromEntries(['status', 'score', 'players', 'actions'].map((kind) => [kind, getWidget(kind)?.getBounds() ?? null]));
+        await writeFile(process.env.PANEL_WIDGET_HOLD, JSON.stringify(bounds));
+        await wait(6000);
+    }
 
     for (const kind of ['status', 'score', 'players', 'actions']) {
         await shot(`14-widget-${kind}`, getWidget(kind));

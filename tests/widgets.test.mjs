@@ -35,19 +35,30 @@ test('preferences start with no widgets and keep a valid list', () => {
     assert.deepEqual(resolve({ widgets: [{ id: 'a', kind: 'players', serverId: 's1' }] }).widgets, [{ id: 'a', kind: 'players', serverId: 's1', bounds: null }]);
 });
 
-test('new widgets open near the top right, each a step from the last', () => {
-    const first = placeWidget('score', area, 0);
-    const second = placeWidget('score', area, 1);
+test('a new widget opens at the top right of the screen', () => {
+    const first = placeWidget('score', area, []);
 
     assert.equal(first.width, WIDGET_KINDS.score.size.width);
     assert.equal(first.x + first.width, 1900);
     assert.equal(first.y, 80);
-    assert.ok(second.x < first.x && second.y > first.y);
+});
+
+test('new widgets never open on top of open ones', () => {
+    const taken = [];
+
+    for (const kind of ['status', 'score', 'players', 'actions', 'status', 'score']) {
+        const spot = placeWidget(kind, area, taken);
+        const clash = taken.some((other) => spot.x < other.x + other.width && other.x < spot.x + spot.width && spot.y < other.y + other.height && other.y < spot.y + spot.height);
+
+        assert.equal(clash, false, `${kind} overlaps an open widget`);
+        assert.ok(spot.x >= area.x && spot.y >= area.y && spot.x + spot.width <= area.x + area.width && spot.y + spot.height <= area.y + area.height);
+        taken.push(spot);
+    }
 });
 
 test('a new widget never opens off a small screen', () => {
     const small = { x: 0, y: 0, width: 300, height: 200 };
-    const bounds = placeWidget('players', small, 5);
+    const bounds = placeWidget('players', small, [{ x: 0, y: 0, width: 300, height: 200 }]);
 
     assert.ok(bounds.x >= 0 && bounds.y >= 0);
     assert.ok(bounds.width <= 300 && bounds.height <= 200);

@@ -55,25 +55,38 @@ export function cleanWidgets(value) {
         .map((entry) => ({ id: entry.id, kind: entry.kind, serverId: entry.serverId, bounds: cleanBounds(entry.bounds) }));
 }
 
+const GAP = 12;
+
+const overlaps = (a, b) => a.x < b.x + b.width + GAP && b.x < a.x + a.width + GAP && a.y < b.y + b.height + GAP && b.y < a.y + a.height + GAP;
+
 /**
- * Where a new widget opens: near the top right of the screen, each one a
- * step down and left of the last so none hides another.
+ * Where a new widget opens: the first free spot in columns down the right
+ * of the screen, so it never lands on top of an open one. When the screen
+ * is full, it opens a step down and left of the last.
  *
  * @param {WidgetKind} kind
  * @param {{ x: number, y: number, width: number, height: number }} area The screen's work area.
- * @param {number} open How many widgets are open already.
+ * @param {Bounds[]} taken Where the open widgets sit.
  * @returns {Bounds}
  */
-export function placeWidget(kind, area, open) {
-    const { width, height } = WIDGET_KINDS[kind].size;
-    const step = (open % 8) * 32;
+export function placeWidget(kind, area, taken) {
+    const width = Math.min(WIDGET_KINDS[kind].size.width, area.width);
+    const height = Math.min(WIDGET_KINDS[kind].size.height, area.height);
+    const top = area.y + Math.min(80, Math.max(0, area.height - height));
 
-    return {
-        x: Math.max(area.x, area.x + area.width - width - 20 - step),
-        y: Math.min(area.y + 80 + step, Math.max(area.y, area.y + area.height - height)),
-        width: Math.min(width, area.width),
-        height: Math.min(height, area.height),
-    };
+    for (let right = area.x + area.width - 20; right - width >= area.x; right -= width + GAP) {
+        for (let y = top; y + height <= area.y + area.height; y += 16) {
+            const spot = { x: right - width, y, width, height };
+
+            if (!taken.some((other) => overlaps(spot, other))) {
+                return spot;
+            }
+        }
+    }
+
+    const step = (taken.length % 8) * 32;
+
+    return { x: Math.max(area.x, area.x + area.width - width - 20 - step), y: Math.min(top + step, Math.max(area.y, area.y + area.height - height)), width, height };
 }
 
 /**
