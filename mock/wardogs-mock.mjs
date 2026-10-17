@@ -24,6 +24,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const FACTIONS = [
     { name: 'Lonestar', colorHex: '#4CB1EF' },
     { name: 'Valkyra', colorHex: '#FA503E' },
+    { name: 'Manticore', colorHex: '#5CC46A' },
 ];
 
 const MAPS = {
@@ -65,7 +66,7 @@ export async function startMockServer(options = {}) {
         experiences: ['Madrid_KOTH_01', 'KOTH_InfantryOnly'],
         lighting: 'DayEarlyFog',
         zone: 'ZoneAlternator.Ozeti.River.Circle',
-        scores: [40, 25],
+        scores: [40, 25, 31],
         tick: 18,
         rotationIndex: 0,
         pendingMap: null,
@@ -87,7 +88,8 @@ export async function startMockServer(options = {}) {
         }
 
         const counts = FACTIONS.map((faction) => state.players.filter((player) => player.faction === faction.name).length);
-        const faction = FACTIONS[counts[0] <= counts[1] ? 0 : 1].name;
+        // New players join the smallest team, like the game's balancing.
+        const faction = FACTIONS[counts.indexOf(Math.min(...counts))].name;
         steamCounter += BigInt(between(3, 900));
         const steamId = String(steamCounter);
 
@@ -132,7 +134,7 @@ export async function startMockServer(options = {}) {
         state.experiences = next.experiences;
         state.lighting = next.lighting ?? pick(LIGHTINGS);
         state.zone = next.zone ?? `ZoneAlternator.${MAPS[next.map]?.name ?? next.map}.${pick(MAPS[next.map]?.zones ?? ['Default.Circle'])}`;
-        state.scores = [0, 0];
+        state.scores = FACTIONS.map(() => 0);
 
         for (const player of state.players) {
             player.kills = 0;
@@ -162,7 +164,7 @@ export async function startMockServer(options = {}) {
 
     // The match plays itself.
     const timer = setInterval(() => {
-        const hill = Math.random() < 0.55 ? 0 : 1;
+        const hill = between(0, FACTIONS.length - 1);
         state.scores[hill] += between(0, 2);
 
         if (state.scores.some((score) => score >= 100)) {
