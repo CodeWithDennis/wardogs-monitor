@@ -1,0 +1,741 @@
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+
+/*
+ * Oxanium for headlines and labels (heavy, blocky letters with chamfered
+ * corners) and Inter for body text. Oxanium carries the site's metric overrides so uppercase
+ * labels sit centred next to their icons.
+ */
+@font-face {
+    font-family: 'Oxanium';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url('./assets/fonts/oxanium/oxanium-latin-600-normal.woff2') format('woff2');
+    ascent-override: 84.5%;
+    descent-override: 15.5%;
+}
+
+@font-face {
+    font-family: 'Oxanium';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('./assets/fonts/oxanium/oxanium-latin-700-normal.woff2') format('woff2');
+    ascent-override: 84.5%;
+    descent-override: 15.5%;
+}
+
+@font-face {
+    font-family: 'Oxanium';
+    font-style: normal;
+    font-weight: 800;
+    font-display: swap;
+    src: url('./assets/fonts/oxanium/oxanium-latin-800-normal.woff2') format('woff2');
+    ascent-override: 84.5%;
+    descent-override: 15.5%;
+}
+
+/*
+ * Colours come from the theme (src/lib/themes.ts sets the nine --t-* steps
+ * the website uses, and --accent). Everything else is worked out from them
+ * here, so every theme gets every shade. Midnight with gold is the
+ * default until the theme script runs.
+ */
+:root {
+    --t-bg: #0e1222;
+    --t-surface: #151b32;
+    --t-raised: #1a2140;
+    --t-hover: #1e2546;
+    --t-border: #262d4a;
+    --t-border-strong: #343c62;
+    --t-text: #ebe6d8;
+    --t-muted: #868ba3;
+    --t-faint: #5b6080;
+    --accent: #e8b54e;
+    --accent-hi: #f4ca70;
+    --accent-ink: #1d1708;
+
+    --bg: var(--t-bg);
+    --rail: color-mix(in srgb, var(--t-bg) 78%, black);
+    --side: color-mix(in srgb, var(--t-bg) 55%, var(--t-surface));
+    --main: var(--t-bg);
+    --panel: var(--t-surface);
+    --raise: var(--t-raised);
+    --hover: var(--t-hover);
+    --select: color-mix(in srgb, var(--t-hover) 88%, var(--t-text));
+    --line: var(--t-border);
+    --line-strong: var(--t-border-strong);
+    --line-soft: color-mix(in srgb, var(--t-border) 55%, var(--t-bg));
+    --input: color-mix(in srgb, var(--t-bg) 80%, black);
+    --track: color-mix(in srgb, var(--t-border) 75%, var(--t-bg));
+    --card: color-mix(in srgb, var(--t-surface) 70%, transparent);
+    --scrim: color-mix(in srgb, var(--t-bg) 60%, transparent);
+    --scrim-strong: color-mix(in srgb, var(--t-bg) 88%, transparent);
+
+    --text: var(--t-text);
+    --text-2: color-mix(in srgb, var(--t-text) 72%, var(--t-muted));
+    --muted: var(--t-muted);
+    --faint: var(--t-faint);
+
+    --accent-soft: color-mix(in srgb, var(--accent) 15%, transparent);
+    --accent-line: color-mix(in srgb, var(--accent) 50%, transparent);
+
+    /* The website's positive, warning and negative colours. */
+    --ok: #3fb97a;
+    --warn: #f0a92e;
+    --bad: #ef5a52;
+    --bad-soft: color-mix(in srgb, var(--bad) 14%, transparent);
+    --info: #6fb4ef;
+
+    --radius: 3.5px;
+    --rail-w: 83.5px;
+    --side-w: 273px;
+    --detail-w: 409px;
+
+    --font-title: 'Oxanium', 'Barlow Condensed', Impact, sans-serif;
+    --font-body: 'Inter', 'Segoe UI', system-ui, sans-serif;
+
+    color-scheme: dark;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+    height: 100%;
+    margin: 0;
+}
+
+body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 15px;
+    letter-spacing: 0.005em;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+    user-select: none;
+}
+
+input,
+textarea,
+select,
+button {
+    font: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+}
+
+button {
+    cursor: pointer;
+}
+
+a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+::selection {
+    background: var(--accent-soft);
+}
+
+:focus-visible {
+    outline: 1px solid var(--accent);
+    outline-offset: 2px;
+}
+
+::-webkit-scrollbar {
+    width: 11px;
+    height: 11px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--line-strong);
+    border: 3.5px solid transparent;
+    background-clip: padding-box;
+    border-radius: 9px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--muted);
+    background-clip: padding-box;
+    border: 3.5px solid transparent;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.drag {
+    -webkit-app-region: drag;
+}
+
+.no-drag,
+.drag button,
+.drag input,
+.drag a,
+.drag select {
+    -webkit-app-region: no-drag;
+}
+
+/* Typography --------------------------------------------------------------- */
+
+.title {
+    font-family: var(--font-title);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin: 0;
+}
+
+/* Small uppercase labels. */
+.label-caps {
+    font-family: var(--font-title);
+    font-weight: 600;
+    font-size: 12.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.muted {
+    color: var(--muted);
+}
+
+.faint {
+    color: var(--faint);
+}
+
+.gold {
+    color: var(--accent);
+}
+
+.num {
+    font-variant-numeric: tabular-nums;
+}
+
+.mono {
+    font-family: 'Cascadia Mono', Consolas, monospace;
+    font-size: 13px;
+    letter-spacing: 0.02em;
+}
+
+.truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* The starry header behind every view title, like the night sky in the reference. */
+.sky {
+    position: relative;
+    background:
+        radial-gradient(1px 1px at 12% 22%, rgb(255 255 255 / 0.55), transparent 60%),
+        radial-gradient(1px 1px at 28% 64%, rgb(255 255 255 / 0.35), transparent 60%),
+        radial-gradient(1.4px 1.4px at 46% 30%, rgb(255 255 255 / 0.6), transparent 60%),
+        radial-gradient(1px 1px at 63% 74%, rgb(255 255 255 / 0.3), transparent 60%),
+        radial-gradient(1px 1px at 72% 18%, rgb(255 255 255 / 0.45), transparent 60%),
+        radial-gradient(1.2px 1.2px at 86% 52%, rgb(255 255 255 / 0.5), transparent 60%),
+        radial-gradient(1px 1px at 93% 14%, rgb(255 255 255 / 0.35), transparent 60%),
+        radial-gradient(1px 1px at 38% 12%, rgb(255 255 255 / 0.3), transparent 60%),
+        radial-gradient(1px 1px at 55% 50%, rgb(255 255 255 / 0.25), transparent 60%),
+        radial-gradient(120% 140% at 20% -20%, color-mix(in srgb, var(--accent) 9%, var(--t-raised)) 0%, transparent 60%),
+        linear-gradient(180deg, var(--t-surface) 0%, color-mix(in srgb, var(--t-surface) 50%, var(--main)) 70%, var(--main) 100%);
+}
+
+/* Controls ----------------------------------------------------------------- */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    height: 35px;
+    padding: 0 15.5px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--raise);
+    color: var(--text);
+    font-family: var(--font-title);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    transition:
+        background 0.12s,
+        border-color 0.12s,
+        color 0.12s;
+}
+
+.btn:hover:not(:disabled) {
+    background: var(--hover);
+    border-color: var(--line-strong);
+}
+
+.btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.btn svg {
+    width: 16.5px;
+    height: 16.5px;
+    flex: none;
+}
+
+.btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 500;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: var(--accent-hi);
+    border-color: var(--accent-hi);
+}
+
+.btn-danger {
+    color: var(--bad);
+    border-color: color-mix(in srgb, var(--bad) 35%, transparent);
+    background: var(--bad-soft);
+}
+
+.btn-danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--bad) 22%, transparent);
+    border-color: color-mix(in srgb, var(--bad) 55%, transparent);
+}
+
+.btn-ghost {
+    background: transparent;
+    border-color: transparent;
+    color: var(--text-2);
+}
+
+.btn-ghost:hover:not(:disabled) {
+    background: var(--hover);
+    border-color: transparent;
+    color: var(--text);
+}
+
+.btn-lg {
+    height: 44px;
+    font-size: 14.5px;
+}
+
+.btn-block {
+    width: 100%;
+}
+
+.btn-sm {
+    height: 28.5px;
+    padding: 0 11px;
+    font-size: 12px;
+}
+
+.icon-btn {
+    display: inline-grid;
+    place-items: center;
+    width: 33px;
+    height: 33px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--scrim);
+    color: var(--text-2);
+    backdrop-filter: blur(6.5px);
+    transition:
+        background 0.12s,
+        color 0.12s;
+}
+
+.icon-btn:hover {
+    background: var(--scrim-strong);
+    color: var(--text);
+}
+
+.icon-btn svg {
+    width: 16.5px;
+    height: 16.5px;
+}
+
+.input,
+.select,
+.textarea {
+    width: 100%;
+    height: 37.5px;
+    padding: 0 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--input);
+    color: var(--text);
+    user-select: text;
+    transition: border-color 0.12s;
+}
+
+.textarea {
+    height: auto;
+    min-height: 88px;
+    padding: 10px 12px;
+    resize: vertical;
+    line-height: 1.5;
+}
+
+.input::placeholder,
+.textarea::placeholder {
+    color: var(--faint);
+}
+
+.input:hover,
+.select:hover,
+.textarea:hover {
+    border-color: var(--line-strong);
+}
+
+.input:focus,
+.select:focus,
+.textarea:focus {
+    outline: none;
+    border-color: var(--accent-line);
+}
+
+.input[aria-invalid='true'],
+.textarea[aria-invalid='true'] {
+    border-color: color-mix(in srgb, var(--bad) 60%, transparent);
+}
+
+.select {
+    appearance: none;
+    padding-right: 33px;
+    background-image:
+        linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+    background-position:
+        calc(100% - 16.5px) 16.5px,
+        calc(100% - 11px) 16.5px;
+    background-size: 5.5px 5.5px;
+    background-repeat: no-repeat;
+}
+
+.select option {
+    background: var(--panel);
+}
+
+.field {
+    display: grid;
+    gap: 6.5px;
+}
+
+.field-label {
+    font-family: var(--font-title);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.field-hint {
+    font-size: 13px;
+    color: var(--faint);
+}
+
+.field-error {
+    font-size: 13px;
+    color: var(--bad);
+}
+
+/* Pills, like "Levels 19-24" and "Horde" in the reference. */
+.pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6.5px;
+    height: 24px;
+    padding: 0 10px;
+    border-radius: 1099px;
+    background: var(--raise);
+    color: var(--text-2);
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.pill-gold {
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+.pill-ok {
+    background: color-mix(in srgb, var(--ok) 13%, transparent);
+    color: var(--ok);
+}
+
+.pill-bad {
+    background: var(--bad-soft);
+    color: var(--bad);
+}
+
+/* "Continue  1" section headings with a hairline under them. */
+.section-label {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 13px;
+    padding-bottom: 9px;
+    margin-bottom: 11px;
+    border-bottom: 1px solid var(--line);
+    color: var(--muted);
+    font-family: var(--font-title);
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.section-label > :last-child {
+    font-variant-numeric: tabular-nums;
+}
+
+/* The gold line under progress, like the step counter in the reference. */
+.progress {
+    position: relative;
+    height: 3.5px;
+    background: var(--track);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.progress > span {
+    position: absolute;
+    inset: 0 auto 0 0;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.6s ease;
+}
+
+/* A selectable row; the open one gets a gold edge, like "The Barrens" in the reference. */
+.row {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    min-height: 42px;
+    padding: 0 15.5px;
+    border-left: 2px solid transparent;
+    color: var(--text);
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+.row:hover {
+    background: var(--hover);
+}
+
+.row.active {
+    background: var(--select);
+    border-left-color: var(--accent);
+}
+
+.card {
+    border: 1px solid var(--line);
+    background: var(--card);
+    border-radius: var(--radius);
+}
+
+.card-gold {
+    border-top: 1px solid var(--accent-line);
+}
+
+.kv {
+    display: grid;
+    grid-template-columns: 105.5px 1fr;
+    gap: 10px 15.5px;
+    font-size: 14.5px;
+}
+
+.kv dt {
+    color: var(--muted);
+}
+
+.kv dd {
+    margin: 0;
+    color: var(--text);
+    min-width: 0;
+}
+
+.dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex: none;
+    background: var(--faint);
+}
+
+.dot.online {
+    background: var(--ok);
+    box-shadow: 0 0 0 3.5px color-mix(in srgb, var(--ok) 15%, transparent);
+}
+
+.dot.offline {
+    background: var(--bad);
+    box-shadow: 0 0 0 3.5px color-mix(in srgb, var(--bad) 15%, transparent);
+}
+
+.dot.pending {
+    background: var(--faint);
+    animation: pulse 1.4s ease-in-out infinite;
+}
+
+.skeleton {
+    border-radius: var(--radius);
+    background: linear-gradient(90deg, var(--raise) 0%, var(--hover) 50%, var(--raise) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s linear infinite;
+}
+
+.empty {
+    display: grid;
+    place-items: center;
+    gap: 9px;
+    padding: 53px 22px;
+    text-align: center;
+    color: var(--muted);
+}
+
+.empty svg {
+    width: 31px;
+    height: 31px;
+    color: var(--faint);
+}
+
+/* Segmented filter, like "Alliance  Horde  All" in the reference. */
+.segmented {
+    display: inline-flex;
+    gap: 2px;
+}
+
+.segmented button {
+    height: 31px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--font-title);
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.segmented button:hover {
+    color: var(--text);
+}
+
+.segmented button.on {
+    background: var(--select);
+    color: var(--text);
+}
+
+.toggle {
+    position: relative;
+    width: 37.5px;
+    height: 21px;
+    flex: none;
+    border: 1px solid var(--line);
+    border-radius: 1099px;
+    background: var(--input);
+    transition: background 0.15s;
+}
+
+.toggle::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14.5px;
+    height: 14.5px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition:
+        transform 0.15s,
+        background 0.15s;
+}
+
+.toggle[aria-checked='true'] {
+    background: var(--accent-soft);
+    border-color: var(--accent-line);
+}
+
+.toggle[aria-checked='true']::after {
+    transform: translateX(16.5px);
+    background: var(--accent);
+}
+
+.kbd {
+    display: inline-grid;
+    place-items: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 4.5px;
+    border: 1px solid var(--line);
+    border-radius: 3.5px;
+    color: var(--muted);
+    font-size: 11.5px;
+}
+
+@keyframes pulse {
+    50% {
+        opacity: 0.35;
+    }
+}
+
+@keyframes shimmer {
+    to {
+        background-position: -200% 0;
+    }
+}
+
+@keyframes rise {
+    from {
+        opacity: 0;
+        transform: translateY(6.5px);
+    }
+}
+
+.fade-enter-active,
+.fade-leave-active {
+    transition: opacity 0.15s;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+    opacity: 0;
+}
+
+/* The row under a list page's header: its search box, then sorting or filters. */
+.toolbar {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 17.5px;
+    padding: 15.5px 35px;
+    border-bottom: 1px solid var(--line-soft);
+    background: var(--main);
+}
+
+/* The scrolling body under a view's header. */
+.view-body {
+    overflow-anchor: none;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 26.5px 35px 39.5px;
+}
+
+.view-body.narrow > * {
+    max-width: 946px;
+}

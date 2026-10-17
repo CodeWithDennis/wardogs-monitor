@@ -1,0 +1,14 @@
+Copyright (c) 2026 CodeWithDennis. All rights reserved.
+
+This software and its source code are proprietary and confidential. No part
+of it may be copied, modified, distributed, sublicensed or sold without the
+prior written permission of the copyright holder.
+
+The compiled application is licensed to end users under the terms of the
+licence they purchased. Using it beyond the free trial without a valid
+licence key is not permitted.
+
+Third-party components keep their own licences: Electron, Vue, Vite and
+lucide (MIT), Inter (SIL Open Font License 1.1) and Oxanium (SIL Open Font
+License 1.1, see src/assets/fonts/oxanium/OFL.txt). Map pictures are from the
+game Wardogs and belong to its developer.
