@@ -24,11 +24,23 @@ async function readJson(name, fallback) {
 }
 
 /** Write through a temporary file, so a crash never leaves half a file. */
-async function writeJson(name, value) {
-    await mkdir(app.getPath('userData'), { recursive: true });
-    const target = file(name);
-    await writeFile(`${target}.tmp`, JSON.stringify(value, null, 2), 'utf8');
-    await rename(`${target}.tmp`, target);
+/** Writes per file, one after another, so two saves at once never trip over each other. */
+const writing = new Map();
+
+function writeJson(name, value) {
+    const run = async () => {
+        await mkdir(app.getPath('userData'), { recursive: true });
+        const target = file(name);
+        // Each write gets its own temporary file, so a second save can't rename the first one's away.
+        const temporary = `${target}.${randomUUID()}.tmp`;
+        await writeFile(temporary, JSON.stringify(value, null, 2), 'utf8');
+        await rename(temporary, target);
+    };
+
+    const next = (writing.get(name) ?? Promise.resolve()).then(run, run);
+    writing.set(name, next.catch(() => undefined));
+
+    return next;
 }
 
 function encrypt(password) {
