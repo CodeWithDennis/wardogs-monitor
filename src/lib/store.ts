@@ -76,6 +76,8 @@ export const state = reactive({
         miniZoom: 1,
         railCollapsed: false,
         sidebarCollapsed: false,
+        detailCollapsed: false,
+        titleFont: 'barlow-condensed',
         notifyServerDown: true,
         notifyWatched: true,
         watchlist: [],
@@ -97,6 +99,8 @@ export const state = reactive({
     licence: null as LicenceStatus | null,
     /** The Players view's tab: all, a faction, watched or left. */
     playersTab: 'all',
+    /** The players table's sort: which column, and which way. */
+    playersSort: { key: 'name', dir: 'asc' } as { key: 'name' | 'kills' | 'deaths' | 'kd' | 'cash' | 'ping'; dir: 'asc' | 'desc' },
     /** Bumped after every action, so lists like bans and activity reload. */
     revision: 0,
 });
@@ -294,7 +298,7 @@ export function selectServer(serverId: string, open = true): void {
 }
 
 /** Show or hide the sidebar (Ctrl+B), or the rail's labels; remembered. */
-export async function togglePanel(which: 'railCollapsed' | 'sidebarCollapsed'): Promise<void> {
+export async function togglePanel(which: 'railCollapsed' | 'sidebarCollapsed' | 'detailCollapsed'): Promise<void> {
     state.preferences = { ...state.preferences, [which]: !state.preferences[which] };
     state.preferences = await window.panel.preferences.set({ [which]: state.preferences[which] });
 }
