@@ -212,6 +212,26 @@ export async function captureViews({ app, mainWindow, openMini, getMini, dir }) 
     console.log('[capture] licence after activating:', await run(`window.panel.license.status().then((s) => s.state)`));
     await shot('23-licensed');
 
+    // Window sizes: the panels fold on their own when the window gets narrow.
+    await run(`document.querySelector('[data-section="control"]')?.click()`);
+    await wait(500);
+
+    for (const [width, height] of [[900, 600], [1180, 720], [1440, 900], [2560, 1400]]) {
+        mainWindow.unmaximize();
+        mainWindow.setMinimumSize(800, 560);
+        mainWindow.setSize(width, height);
+        await wait(1500);
+
+        for (const view of ['overview', 'players']) {
+            await run(`document.querySelector('[data-view="${view}"]')?.click()`);
+            await wait(1400);
+            await shot(`50-${width}x${height}-${view}`);
+        }
+    }
+
+    mainWindow.setSize(1500, 920);
+    await wait(600);
+
     const serverId = await run(`window.panel.servers.list().then((list) => list[0].id)`);
     await openMini(serverId);
     await wait(3000);

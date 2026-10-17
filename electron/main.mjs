@@ -60,6 +60,12 @@ Menu.setApplicationMenu(null);
 // alerts stay timely, so that extra slowdown is switched off.
 app.commandLine.appendSwitch('disable-features', 'IntensiveWakeUpThrottling');
 
+// Screenshot runs capture a window that may sit behind others; keep it painting and animating there.
+if (process.env.PANEL_SCREENSHOTS) {
+    app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+    app.commandLine.appendSwitch('disable-renderer-backgrounding');
+}
+
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
 /** @type {BrowserWindow | null} */
@@ -215,8 +221,8 @@ function createMainWindow({ hidden }) {
 
     mainWindow = new BrowserWindow({
         ...bounds,
-        minWidth: 1180,
-        minHeight: 720,
+        minWidth: 900,
+        minHeight: 600,
         show: false,
         backgroundColor: colors.bg,
         title: brand.name,

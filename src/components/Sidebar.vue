@@ -3,7 +3,7 @@ import { Ban, CircleCheck, CircleOff, Gauge, Hourglass, LayoutGrid, Map, Megapho
 import { computed, onMounted, ref, watch } from 'vue';
 import ServerSwitcher from '@/components/ServerSwitcher.vue';
 import { BRAND, WORDMARK } from '@/lib/brand';
-import { openMini, openOptions, openView, section, selectedLive, state, togglePanel, VIEWS, type ControlView } from '@/lib/store';
+import { openMini, openOptions, openView, section, selectedLive, sidebarFolded, state, togglePanel, VIEWS, type ControlView } from '@/lib/store';
 
 /**
  * The second column: the wordmark, the server switcher and a list
@@ -18,7 +18,7 @@ const ICONS: Record<ControlView, unknown> = { overview: Gauge, players: Users, m
  * so the views and their counts stay one click away. Ctrl+B and the button
  * at the bottom switch between the two.
  */
-const compact = computed(() => state.preferences.sidebarCollapsed);
+const compact = computed(() => sidebarFolded.value);
 
 /**
  * The sidebar is at least as wide as the product name needs, measured once

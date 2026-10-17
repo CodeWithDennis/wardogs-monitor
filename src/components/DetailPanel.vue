@@ -8,7 +8,7 @@ import { mapName } from '@/lib/maps';
 import { killPlayer, openPlayerAction } from '@/lib/playerActions';
 import { liftBan } from '@/lib/banlists';
 import { isWatched, setWatchNote, toggleWatch, watchedEntry } from '@/lib/watchlist';
-import { openMini, openView, refreshLive, selectedLive, selectedServer, state, toast, togglePanel } from '@/lib/store';
+import { detailFolded, openMini, openView, refreshLive, selectedLive, selectedServer, state, toast, togglePanel } from '@/lib/store';
 import type { Ban } from '@/types';
 
 /**
@@ -74,15 +74,15 @@ function copy(text: string, what: string): void {
  * when the selection is cleared.
  */
 const peek = ref(false);
-const collapsed = computed(() => state.preferences.detailCollapsed && !peek.value);
+const collapsed = computed(() => detailFolded.value && !peek.value);
 const selection = computed(() => (player.value ? `player:${player.value.steamId}` : ban.value ? `ban:${ban.value.steamId}` : null));
 
 watch(selection, (current) => {
-    peek.value = current !== null && state.preferences.detailCollapsed;
+    peek.value = current !== null && detailFolded.value;
 });
 
 watch(
-    () => state.preferences.detailCollapsed,
+    () => detailFolded.value,
     () => {
         peek.value = false;
     },
@@ -92,7 +92,7 @@ const dot = computed(() => (live.value === undefined ? 'pending' : live.value.on
 const stripTitle = computed(() => (status.value ? `${status.value.players} of ${status.value.maxPlayers} players · ${mapName(status.value.map)}` : (selectedServer.value?.name ?? 'Server')));
 
 function expand(): void {
-    if (state.preferences.detailCollapsed) {
+    if (detailFolded.value) {
         togglePanel('detailCollapsed');
     }
 }
@@ -101,7 +101,7 @@ function expand(): void {
 function collapse(): void {
     if (peek.value) {
         peek.value = false;
-    } else if (!state.preferences.detailCollapsed) {
+    } else if (!detailFolded.value) {
         togglePanel('detailCollapsed');
     }
 }
