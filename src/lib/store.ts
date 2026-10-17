@@ -74,6 +74,8 @@ export const state = reactive({
         accent: 'gold',
         zoom: 1,
         miniZoom: 1,
+        railCollapsed: false,
+        sidebarCollapsed: false,
         notifyServerDown: true,
         notifyWatched: true,
         watchlist: [],
@@ -289,6 +291,12 @@ export function selectServer(serverId: string, open = true): void {
     if (open && sectionOf(state.view) !== 'control') {
         state.view = state.lastControlView;
     }
+}
+
+/** Show or hide the sidebar (Ctrl+B), or the rail's labels; remembered. */
+export async function togglePanel(which: 'railCollapsed' | 'sidebarCollapsed'): Promise<void> {
+    state.preferences = { ...state.preferences, [which]: !state.preferences[which] };
+    state.preferences = await window.panel.preferences.set({ [which]: state.preferences[which] });
 }
 
 /** Open Options on one of its tabs. */

@@ -1,15 +1,16 @@
 {
-    "name": "Wardogs RCON",
+    "name": "Wardogs Monitor",
     "tagline": "Server control",
     "description": "Monitor, moderate and run your Wardogs dedicated servers from one Windows app.",
-    "appId": "app.wardogsrcon.desktop",
-    "dataFolder": "Wardogs RCON",
+    "appId": "com.wardogsmonitor.app",
+    "dataFolder": "Wardogs Monitor",
     "previousDataFolders": [
+        "Wardogs RCON",
         "Handler Server Panel",
         "Phantom Server Control"
     ],
-    "website": "",
+    "website": "https://wardogsmonitor.com",
     "supportEmail": "",
-    "licenseKeyPrefix": "WRCON",
+    "licenseKeyPrefix": "WDM",
     "trialDays": 14
 }

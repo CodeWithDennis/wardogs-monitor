@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { Gauge, LayoutGrid, ScrollText, Search, Settings2 } from 'lucide-vue-next';
+import { ChevronsLeft, ChevronsRight, Gauge, LayoutGrid, PanelLeftOpen, ScrollText, Search, Settings2 } from 'lucide-vue-next';
 import BrandMark from '@/components/BrandMark.vue';
 import { BRAND } from '@/lib/brand';
-import { openView, section, state, type Section } from '@/lib/store';
+import { openView, section, state, togglePanel, type Section } from '@/lib/store';
 
 /**
  * The narrow column of sections on the far left, like Guides / Lookup /
@@ -21,7 +21,7 @@ function open(id: Section): void {
 </script>
 
 <template>
-    <nav class="rail" aria-label="Sections">
+    <nav class="rail" :class="{ collapsed: state.preferences.railCollapsed }" aria-label="Sections">
         <div class="logo drag">
             <BrandMark class="mark" :aria-label="BRAND.name" />
         </div>
@@ -47,6 +47,15 @@ function open(id: Section): void {
         </button>
 
         <div class="spacer" />
+
+        <button v-if="state.preferences.sidebarCollapsed" type="button" class="item small" title="Show the sidebar (Ctrl+B)" @click="togglePanel('sidebarCollapsed')">
+            <PanelLeftOpen :stroke-width="1.75" />
+            <span>Sidebar</span>
+        </button>
+        <button type="button" class="item small" :title="state.preferences.railCollapsed ? 'Show labels' : 'Icons only'" @click="togglePanel('railCollapsed')">
+            <component :is="state.preferences.railCollapsed ? ChevronsRight : ChevronsLeft" :stroke-width="1.75" />
+            <span>Collapse</span>
+        </button>
 
         <button type="button" class="item" data-section="options" :class="{ active: section === 'options' }" @click="openView('options')">
             <Settings2 :stroke-width="1.75" />
@@ -124,6 +133,29 @@ function open(id: Section): void {
 .item:disabled {
     opacity: 0.35;
     cursor: default;
+}
+
+.collapsed {
+    width: 60px;
+}
+
+.collapsed .item span {
+    display: none;
+}
+
+.collapsed .item {
+    padding: 14px 4px;
+}
+
+.small {
+    padding-top: 9px;
+    padding-bottom: 9px;
+    color: var(--faint);
+}
+
+.small svg {
+    width: 17px;
+    height: 17px;
 }
 
 .spacer {

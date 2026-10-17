@@ -107,6 +107,7 @@ const openUrl = (url: string) => window.panel.openExternal(url);
 const SHORTCUTS = [
     ['Ctrl+K', 'Search everything: players on every server, servers, views and actions'],
     ['Ctrl+H', 'All servers as cards'],
+    ['Ctrl+B', 'Show or hide the sidebar'],
     ['Ctrl+1 … Ctrl+6', 'Open Overview, Players, Match, Rotation, Bans, Settings'],
     ['Ctrl + / Ctrl -', 'Zoom in and out (Ctrl+mouse wheel works too)'],
     ['Ctrl+0', 'Reset zoom'],

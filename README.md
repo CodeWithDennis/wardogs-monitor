@@ -1,8 +1,8 @@
-# Wardogs RCON
+# Wardogs Monitor
 
-**Server control for Wardogs.** A Windows desktop app to monitor, moderate and run Wardogs dedicated servers: live scores and players, kicks and bans, the match and its map rotation, and every server setting, for as many servers as you run.
+**Server control for Wardogs** ([wardogsmonitor.com](https://wardogsmonitor.com)). A Windows desktop app to monitor, moderate and run Wardogs dedicated servers: live scores and players, kicks and bans, the match and its map rotation, and every server setting, for as many servers as you run.
 
-[![Build](https://github.com/CodeWithDennis/wardogs-rcon/actions/workflows/build.yml/badge.svg)](https://github.com/CodeWithDennis/wardogs-rcon/actions/workflows/build.yml)
+[![Build](https://github.com/CodeWithDennis/wardogs-monitor/actions/workflows/build.yml/badge.svg)](https://github.com/CodeWithDennis/wardogs-monitor/actions/workflows/build.yml)
 
 ![All servers as cards](docs/screenshots/servers.png)
 
@@ -56,16 +56,18 @@
 | **Themes** | **Trial ended, servers locked** |
 | ![Themes](docs/screenshots/themes.png) | ![Licence](docs/screenshots/licence.png) |
 
-The mini monitor:
+The mini monitor, and the window with the sidebar hidden and the rail on icons only:
 
 ![Mini monitor](docs/screenshots/mini-monitor.png)
 
+![Collapsed](docs/screenshots/collapsed.png)
+
 ## Install
 
-Download the latest build from the [Releases](https://github.com/CodeWithDennis/wardogs-rcon/releases) page, or from the artifacts of the latest [Build run](https://github.com/CodeWithDennis/wardogs-rcon/actions/workflows/build.yml):
+Download the latest build from the [Releases](https://github.com/CodeWithDennis/wardogs-monitor/releases) page, or from the artifacts of the latest [Build run](https://github.com/CodeWithDennis/wardogs-monitor/actions/workflows/build.yml):
 
-- `Wardogs RCON Setup x.y.z.exe`: an installer (choose the folder, adds a Start menu entry).
-- `Wardogs RCON x.y.z.exe`: a portable exe that runs without installing.
+- `Wardogs Monitor Setup x.y.z.exe`: an installer (choose the folder, adds a Start menu entry).
+- `Wardogs Monitor x.y.z.exe`: a portable exe that runs without installing.
 
 The builds are not code-signed yet, so Windows SmartScreen may warn on first start: choose **More info → Run anyway**.
 
@@ -85,6 +87,7 @@ The app checks that the server answers with that password before saving it.
 | --- | --- |
 | Ctrl+K | Search everything |
 | Ctrl+H | All servers as cards |
+| Ctrl+B | Show or hide the sidebar (the rail's « button switches it to icons only) |
 | Ctrl+1 … Ctrl+6 | Overview, Players, Match, Rotation, Bans, Settings |
 | Ctrl+F | Jump to the page's search box |
 | F5 or Ctrl+R | Read the server again now |
@@ -132,7 +135,7 @@ Code signing: the workflow builds unsigned (`CSC_IDENTITY_AUTO_DISCOVERY=false`)
 
 The app runs a **14-day free trial** from its first start (`trialDays` in `brand.json`). After that, real servers are locked until a licence key is activated; the demo server always works. The lock is enforced in Electron's main process, not just hidden in the window.
 
-A licence key is the licence itself (name, email, plan, optional end date), signed with an Ed25519 private key. The app ships only the public key, so it can check keys offline but can never make them. Editing a key, or signing one with another private key, makes it invalid. Keys look like `WRCON-<licence>.<signature>`.
+A licence key is the licence itself (name, email, plan, optional end date), signed with an Ed25519 private key. The app ships only the public key, so it can check keys offline but can never make them. Editing a key, or signing one with another private key, makes it invalid. Keys look like `WDM-<licence>.<signature>`.
 
 ```bash
 node scripts/license/keygen.mjs      # once: makes license-signing/private.pem and electron/license-public-key.mjs
@@ -145,12 +148,13 @@ node scripts/license/issue.mjs --name "Jane Doe" --email jane@example.com --days
 - Selling through Lemon Squeezy, Gumroad or Paddle works by issuing a key when an order comes in, by hand or from their webhook with `issue.mjs`.
 - Offline keys can be copied between PCs; the licensee's name shows in the app, which discourages sharing. For hard seat limits, add online activation through a licence API such as Lemon Squeezy's `/v1/licenses/activate`.
 - The trial start lives in the app's data folder, so deleting that folder restarts the trial.
+- **Planned:** online activation, payments (Stripe) and licence management on [wardogsmonitor.com](https://wardogsmonitor.com), a Laravel site built on [Larament](https://github.com/codewithdennis/larament). The app will check keys against it, with the offline signature kept as a fallback.
 
 ## Renaming and branding
 
 The product name, tagline, licence key prefix, trial length, website and support email live in [`brand.json`](brand.json). When renaming, also change `productName` in `package.json` and the `<title>` in `index.html`.
 
-The data folder (`%APPDATA%\Wardogs RCON`) is set by `dataFolder` and stays put across renames; `previousDataFolders` lists older folders whose saved servers move over on first start.
+The data folder (`%APPDATA%\Wardogs Monitor`) is set by `dataFolder` and stays put across renames; `previousDataFolders` lists older folders whose saved servers move over on first start.
 
 The app icon (`build/icon.png`) is rendered from `src/assets/brand/mark.svg` with `npx electron scripts/make-icon.mjs`.
 
@@ -211,7 +215,7 @@ tests/                      node:test suites
 - **The name**: "Wardogs" is the game's trademark, and the developer runs `rcon.wardogs.com`. Get the developer's permission before selling under this name, or rename the app (see [Renaming and branding](#renaming-and-branding)).
 - **The map pictures** in `src/assets/maps` are screenshots from the game; they need the developer's permission too, or replacing with your own artwork.
 - **Code signing**: a certificate removes the SmartScreen warning and builds trust with buyers.
-- **Website and support email**: fill in `website` and `supportEmail` in `brand.json`; the Licence page then shows a **Buy a licence** button.
+- **Support email**: fill in `supportEmail` in `brand.json`. The website is set to wardogsmonitor.com, so the Licence page shows a **Buy a licence** button.
 
 ## Licence
 

@@ -1,10 +1,10 @@
 {
-  "name": "wardogs-rcon",
-  "productName": "Wardogs RCON",
+  "name": "wardogs-monitor",
+  "productName": "Wardogs Monitor",
   "version": "0.1.0",
   "description": "Monitor, moderate and run your Wardogs dedicated servers from one Windows app.",
   "private": true,
-  "author": "Wardogs RCON",
+  "author": "Wardogs Monitor",
   "type": "module",
   "main": "electron/main.mjs",
   "scripts": {
@@ -19,8 +19,8 @@
     "check": "vue-tsc --noEmit && node --test \"tests/*.test.mjs\""
   },
   "build": {
-    "appId": "app.wardogsrcon.desktop",
-    "productName": "Wardogs RCON",
+    "appId": "com.wardogsmonitor.app",
+    "productName": "Wardogs Monitor",
     "directories": {
       "output": "release"
     },
@@ -59,10 +59,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/CodeWithDennis/wardogs-rcon.git"
+    "url": "https://github.com/CodeWithDennis/wardogs-monitor.git"
   },
   "license": "UNLICENSED",
   "engines": {
     "node": ">=22"
-  }
+  },
+  "homepage": "https://wardogsmonitor.com"
 }

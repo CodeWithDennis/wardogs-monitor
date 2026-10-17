@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { Ban, CircleCheck, CircleOff, Gauge, LayoutGrid, Map, Megaphone, PictureInPicture2, Plus, Repeat, Server, SlidersHorizontal, Users } from 'lucide-vue-next';
-import { computed, ref, watch } from 'vue';
+import { Ban, CircleCheck, CircleOff, Gauge, LayoutGrid, Map, Megaphone, PanelLeftClose, PictureInPicture2, Plus, Repeat, Server, SlidersHorizontal, Users } from 'lucide-vue-next';
+import { computed, onMounted, ref, watch } from 'vue';
 import ServerSwitcher from '@/components/ServerSwitcher.vue';
 import { BRAND, WORDMARK } from '@/lib/brand';
-import { openMini, openOptions, openView, section, selectedLive, state, VIEWS, type ControlView } from '@/lib/store';
+import { openMini, openOptions, openView, section, selectedLive, state, togglePanel, VIEWS, type ControlView } from '@/lib/store';
 
 /**
  * The second column: the wordmark, the server switcher and a list
@@ -12,6 +12,25 @@ import { openMini, openOptions, openView, section, selectedLive, state, VIEWS, t
  * or a server filter on the activity log.
  */
 const ICONS: Record<ControlView, unknown> = { overview: Gauge, players: Users, match: Map, rotation: Repeat, bans: Ban, settings: SlidersHorizontal };
+
+/**
+ * The sidebar is at least as wide as the product name needs, measured once
+ * the fonts have loaded, so a longer name never gets cut off.
+ */
+const brand = ref<HTMLElement | null>(null);
+const wordmark = ref<HTMLElement | null>(null);
+const width = ref<number | null>(null);
+
+onMounted(async () => {
+    await document.fonts.ready;
+
+    if (brand.value && wordmark.value) {
+        const style = getComputedStyle(brand.value);
+        const needed = wordmark.value.scrollWidth + parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) + 30;
+        const base = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--side-w')) || 273;
+        width.value = Math.max(base, Math.ceil(needed));
+    }
+});
 
 const bansCount = ref<number | null>(null);
 const rotationCount = ref<number | null>(null);
@@ -61,10 +80,11 @@ function playersOnline(serverId: string): string {
 </script>
 
 <template>
-    <aside class="sidebar">
-        <header class="brand drag">
-            <h1 class="wordmark" :aria-label="BRAND.name">{{ WORDMARK.lead }} <span class="last">{{ WORDMARK.last }}</span></h1>
+    <aside class="sidebar" :style="width ? { width: `${width}px` } : undefined">
+        <header ref="brand" class="brand drag">
+            <h1 ref="wordmark" class="wordmark" :aria-label="BRAND.name">{{ WORDMARK.lead }} <span class="last">{{ WORDMARK.last }}</span></h1>
             <p class="label-caps">{{ BRAND.tagline }}</p>
+            <button type="button" class="collapse" title="Hide the sidebar (Ctrl+B)" @click="togglePanel('sidebarCollapsed')"><PanelLeftClose /></button>
         </header>
 
         <ServerSwitcher />
@@ -140,6 +160,7 @@ function playersOnline(serverId: string): string {
 }
 
 .brand {
+    position: relative;
     height: 101px;
     margin-bottom: 4.5px;
     padding: 31px 26.5px 0;
@@ -165,6 +186,40 @@ function playersOnline(serverId: string): string {
     color: var(--accent);
     font-size: 11.5px;
     letter-spacing: 0.22em;
+}
+
+.collapse {
+    position: absolute;
+    top: 33px;
+    right: 12px;
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border: 0;
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--faint);
+    opacity: 0;
+    transition:
+        opacity 0.12s,
+        color 0.12s,
+        background 0.12s;
+}
+
+.sidebar:hover .collapse,
+.collapse:focus-visible {
+    opacity: 1;
+}
+
+.collapse:hover {
+    background: var(--hover);
+    color: var(--text);
+}
+
+.collapse svg {
+    width: 16px;
+    height: 16px;
 }
 
 .list,

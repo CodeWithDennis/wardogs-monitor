@@ -25,6 +25,8 @@ export const DEFAULT_PREFERENCES = {
     accent: 'gold',
     zoom: 1,
     miniZoom: 1,
+    railCollapsed: false,
+    sidebarCollapsed: false,
     notifyServerDown: true,
     notifyWatched: true,
     /** Players to keep an eye on: { steamId, name, note, addedAt }. */
