@@ -88,8 +88,7 @@ const licenceText = computed(() => {
 const licenceTone = computed(() => (state.licence?.state === 'licensed' ? 'ok' : state.licence?.state === 'trial' ? 'gold' : 'bad'));
 
 function broadcast(): void {
-    openView('overview');
-    requestAnimationFrame(() => document.getElementById('broadcast')?.focus());
+    state.broadcasting = true;
 }
 
 function playersOnline(serverId: string): string {

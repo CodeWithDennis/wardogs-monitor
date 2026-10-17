@@ -101,6 +101,8 @@ export const state = reactive({
     /** The tab Options opens on. */
     optionsTab: 'general',
     paletteOpen: false,
+    /** The broadcast dialog is open (for the selected server). */
+    broadcasting: false,
     licence: null as LicenceStatus | null,
     /** The Players view's tab: all, a faction, watched or left. */
     playersTab: 'all',

@@ -126,10 +126,7 @@ const actions = computed<Item[]>(() => {
                 label: `Broadcast on ${name}`,
                 icon: Megaphone,
                 keywords: 'broadcast message announce everyone',
-                run: () => {
-                    openView('overview');
-                    requestAnimationFrame(() => document.getElementById('broadcast')?.focus());
-                },
+                run: () => (state.broadcasting = true),
             },
             {
                 id: 'restart',

@@ -9,7 +9,7 @@ import { killPlayer, openPlayerAction } from '@/lib/playerActions';
 import { liftBan } from '@/lib/banlists';
 import { isWatched, setWatchNote, toggleWatch, watchedEntry } from '@/lib/watchlist';
 import { pickWidgets } from '@/lib/widgets';
-import { openView, refreshLive, selectedLive, selectedServer, state, toast } from '@/lib/store';
+import { refreshLive, selectedLive, selectedServer, state, toast } from '@/lib/store';
 import type { Ban } from '@/types';
 
 /**
@@ -69,8 +69,7 @@ function copy(text: string, what: string): void {
 }
 
 function broadcast(): void {
-    openView('overview');
-    requestAnimationFrame(() => document.getElementById('broadcast')?.focus());
+    state.broadcasting = true;
 }
 
 /** On a linked server this also offers to lift it on every linked server. */
