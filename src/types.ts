@@ -220,7 +220,6 @@ export interface Preferences {
     miniZoom: number;
     railCollapsed: boolean;
     sidebarCollapsed: boolean;
-    detailCollapsed: boolean;
     notifyServerDown: boolean;
     notifyWatched: boolean;
     watchlist: WatchedPlayer[];

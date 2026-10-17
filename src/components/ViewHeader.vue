@@ -14,7 +14,7 @@ const tab = defineModel<string>('tab');
 </script>
 
 <template>
-    <header class="view-header sky drag">
+    <header class="view-header sky drag" :class="{ plain: !tabs && !$slots.filters }">
         <div class="heading">
             <div class="text">
                 <h2 class="title">{{ title }}</h2>
@@ -42,18 +42,24 @@ const tab = defineModel<string>('tab');
 </template>
 
 <style scoped>
+/* Without tabs under it (.plain), the header keeps the same room below the heading as above it. */
 .view-header {
     flex: none;
-    padding: 33px 35px 0;
+    padding: 30px 35px 0;
     border-bottom: 1px solid var(--line);
 }
 
+.view-header.plain {
+    padding-bottom: 26px;
+}
+
+/* The actions sit centred on the title and its line, not on the title's top. */
 .heading {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     gap: 26.5px;
-    min-height: 75px;
+    min-height: 62px;
     /* The actions stay clear of the window's own buttons (see .content in Shell.vue; the header already pads 35px). */
     padding-right: max(0px, calc(var(--caption-clear, var(--caption-w)) - 35px));
 }
@@ -75,7 +81,6 @@ const tab = defineModel<string>('tab');
     display: flex;
     flex: none;
     gap: 10px;
-    padding-top: 2px;
 }
 
 .bar {
@@ -176,6 +181,10 @@ const tab = defineModel<string>('tab');
         padding: 24px 20px 0;
     }
 
+    .view-header.plain {
+        padding-bottom: 20px;
+    }
+
     .heading {
         flex-wrap: wrap;
         gap: 13px 20px;
@@ -193,6 +202,14 @@ const tab = defineModel<string>('tab');
 
     .bar {
         margin-top: 13px;
+    }
+
+    .tabs {
+        gap: 0;
+    }
+
+    .tabs button {
+        padding: 0 10px;
     }
 }
 </style>

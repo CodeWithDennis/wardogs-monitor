@@ -212,13 +212,12 @@ export async function captureViews({ app, mainWindow, openMini, getMini, dir }) 
     console.log('[capture] licence after activating:', await run(`window.panel.license.status().then((s) => s.state)`));
     await shot('23-licensed');
 
-    // Window sizes: the panels fold on their own when the window gets narrow.
+    // Window sizes: from the smallest the window allows (the sidebar folds on its own there) up.
     await run(`document.querySelector('[data-section="control"]')?.click()`);
     await wait(500);
 
-    for (const [width, height] of [[900, 600], [1180, 720], [1440, 900], [2560, 1400]]) {
+    for (const [width, height] of [[1100, 640], [1180, 720], [1440, 900], [2560, 1400]]) {
         mainWindow.unmaximize();
-        mainWindow.setMinimumSize(800, 560);
         mainWindow.setSize(width, height);
         await wait(1500);
 

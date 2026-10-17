@@ -155,10 +155,12 @@ function openExternal(url) {
 /**
  * Zoom like a browser: Ctrl + / Ctrl = and Ctrl - (also on the number pad),
  * Ctrl 0 to reset, and Ctrl + mouse wheel. Each window remembers its zoom.
+ * `onZoom` hears every factor set, the saved one on load included.
  */
-function attachZoom(window, key) {
+function attachZoom(window, key, onZoom = () => {}) {
     const apply = async (factor) => {
         window.webContents.setZoomFactor(factor);
+        onZoom(factor);
         const next = await savePreferences({ [key]: factor });
         BrowserWindow.getAllWindows().forEach((other) => other.webContents.send('preferences:changed', next));
     };
@@ -190,7 +192,9 @@ function attachZoom(window, key) {
     window.webContents.on('zoom-changed', (_event, direction) => step(direction === 'in' ? 1 : -1));
 
     window.webContents.on('did-finish-load', async () => {
-        window.webContents.setZoomFactor((await preferences.get())[key] ?? 1);
+        const factor = (await preferences.get())[key] ?? 1;
+        window.webContents.setZoomFactor(factor);
+        onZoom(factor);
     });
 
     return apply;
@@ -198,6 +202,29 @@ function attachZoom(window, key) {
 
 /** @type {Record<string, (factor: number) => void>} */
 const zoomers = {};
+
+/**
+ * The smallest main window, in page pixels: the rail, the folded sidebar, a
+ * page and the detail panel side by side, with nothing squeezed. Zooming in
+ * makes page pixels bigger, so the window's minimum grows with the zoom
+ * (never past the screen it is on).
+ */
+const MAIN_MINIMUM = { width: 1100, height: 640 };
+
+function fitMinimumSize(window, factor) {
+    const area = screen.getDisplayMatching(window.getBounds()).workArea;
+    const width = Math.min(area.width, Math.round(MAIN_MINIMUM.width * factor));
+    const height = Math.min(area.height, Math.round(MAIN_MINIMUM.height * factor));
+    window.setMinimumSize(width, height);
+
+    if (!window.isMaximized() && !window.isFullScreen()) {
+        const [currentWidth, currentHeight] = window.getSize();
+
+        if (currentWidth < width || currentHeight < height) {
+            window.setSize(Math.max(currentWidth, width), Math.max(currentHeight, height));
+        }
+    }
+}
 
 const webPreferences = {
     preload: path.join(here, 'preload.cjs'),
@@ -221,8 +248,8 @@ function createMainWindow({ hidden }) {
 
     mainWindow = new BrowserWindow({
         ...bounds,
-        minWidth: 900,
-        minHeight: 600,
+        minWidth: Math.min(area.width, MAIN_MINIMUM.width),
+        minHeight: Math.min(area.height, MAIN_MINIMUM.height),
         show: false,
         backgroundColor: colors.bg,
         title: brand.name,
@@ -233,7 +260,7 @@ function createMainWindow({ hidden }) {
     });
 
     lockDown(mainWindow);
-    zoomers.zoom = attachZoom(mainWindow, 'zoom');
+    zoomers.zoom = attachZoom(mainWindow, 'zoom', (factor) => fitMinimumSize(mainWindow, factor));
     load(mainWindow, 'main', { bg: colors.bg, text: colors.text, muted: colors.muted, accent: colors.accent });
 
     // Maximising shows the window, so a hidden start keeps that for later.
@@ -780,7 +807,6 @@ function registerIpc() {
             'accent',
             'railCollapsed',
             'sidebarCollapsed',
-            'detailCollapsed',
             'notifyServerDown',
             'notifyWatched',
             'watchlist',

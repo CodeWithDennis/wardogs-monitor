@@ -143,7 +143,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
     --caption-clear: var(--caption-w);
 }
 
-.content:has(+ .detail:not(.collapsed)) {
+.content:has(+ .detail) {
     --caption-clear: 0px;
 }
 
