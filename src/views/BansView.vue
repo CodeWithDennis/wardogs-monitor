@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { Ban as BanIcon, Plus, ShieldCheck } from 'lucide-vue-next';
+import { Ban as BanIcon, Link2, Plus, ShieldCheck } from 'lucide-vue-next';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import Modal from '@/components/Modal.vue';
 import SearchField from '@/components/SearchField.vue';
 import ViewHeader from '@/components/ViewHeader.vue';
 import { dateTime } from '@/lib/format';
+import { groupOf, openSyncPreview } from '@/lib/banlists';
 import { act, busy, state } from '@/lib/store';
-import type { BansAnswer } from '@/types';
+import type { BanSyncPlan, BansAnswer } from '@/types';
 
 /** Everyone banned from the server; open one to lift it, or ban a Steam ID that is not online. */
 const answer = ref<BansAnswer | null>(null);
@@ -22,6 +23,50 @@ async function load(): Promise<void> {
 
 onMounted(load);
 watch(() => state.revision, load);
+
+/**
+ * A linked server shows which ban list it shares and marks the bans that
+ * are not on every linked server yet. Reading the plan writes nothing.
+ */
+const group = computed(() => groupOf(state.selectedId));
+const others = computed(() => (group.value ? group.value.serverIds.filter((id) => id !== state.selectedId).length : 0));
+const linkedPlan = ref<BanSyncPlan | null>(null);
+
+async function loadPlan(): Promise<void> {
+    const groupId = group.value?.id;
+
+    if (!groupId || others.value === 0) {
+        linkedPlan.value = null;
+
+        return;
+    }
+
+    const result = await window.panel.banLists.plan(groupId);
+    linkedPlan.value = result.ok && group.value?.id === groupId ? result.plan : null;
+}
+
+watch([() => group.value?.id, () => group.value?.serverIds.join(), () => state.revision], loadPlan, { immediate: true });
+
+/** Steam ID → the linked servers that still lack it, and the ones the shared list lifted. */
+const missingElsewhere = computed(() => {
+    const missing: Record<string, string[]> = {};
+
+    for (const server of linkedPlan.value?.servers ?? []) {
+        if (server.serverId !== state.selectedId) {
+            for (const ban of server.toAdd) {
+                (missing[ban.steamId] ??= []).push(server.serverName);
+            }
+        }
+    }
+
+    return missing;
+});
+
+/** Shared bans some linked server (this one included) still lacks. */
+const notEverywhere = computed(() => new Set(linkedPlan.value?.servers.flatMap((server) => server.toAdd.map((ban) => ban.steamId)) ?? []).size);
+
+const liftedHere = computed(() => new Set(linkedPlan.value?.servers.find((server) => server.serverId === state.selectedId)?.toRemove.map((entry) => entry.steamId) ?? []));
+const pendingHere = computed(() => linkedPlan.value?.servers.find((server) => server.serverId === state.selectedId)?.toAdd.length ?? 0);
 
 const bans = computed(() => {
     const term = state.search.trim().toLowerCase();
@@ -59,6 +104,17 @@ async function ban(): Promise<void> {
         <SearchField placeholder="Search by Steam ID or reason" :count="bans.length" />
     </div>
 
+    <div v-if="group" class="linked">
+        <Link2 class="linked-icon" />
+        <span class="linked-text">
+            Linked to “{{ group.name }}”{{ others > 0 ? ` with ${others} other ${others === 1 ? 'server' : 'servers'}` : ', with no other servers yet' }}
+            <template v-if="linkedPlan && (notEverywhere > 0 || liftedHere.size > 0)">
+                · <span class="gold">{{ notEverywhere }} {{ notEverywhere === 1 ? 'ban is' : 'bans are' }} not on every server{{ pendingHere ? `, ${pendingHere} missing here` : '' }}{{ liftedHere.size ? `, ${liftedHere.size} to lift here` : '' }}</span>
+            </template>
+        </span>
+        <button v-if="others > 0" type="button" class="btn btn-sm" @click="openSyncPreview(group.id)">Sync now</button>
+    </div>
+
     <div class="view-body flush">
         <p v-if="answer?.error" class="muted pad">{{ answer.error }}</p>
 
@@ -77,7 +133,11 @@ async function ban(): Promise<void> {
                 @click="state.selectedBan = state.selectedBan === entry.steamId ? null : entry.steamId"
             >
                 <span class="id mono"><BanIcon class="icon" />{{ entry.steamId }}</span>
-                <span class="truncate" :class="{ muted: !entry.reason }">{{ entry.reason || 'No reason' }}</span>
+                <span class="reason">
+                    <span class="truncate" :class="{ muted: !entry.reason }">{{ entry.reason || 'No reason' }}</span>
+                    <span v-if="liftedHere.has(entry.steamId)" class="pill pill-ok mark" title="Lifted on the shared list: the next sync lifts it here">To lift</span>
+                    <span v-else-if="missingElsewhere[entry.steamId]" class="pill pill-gold mark" :title="`Not yet on ${missingElsewhere[entry.steamId].join(', ')}`">Not synced</span>
+                </span>
                 <span class="muted truncate">{{ entry.bannedBy ?? '–' }}</span>
                 <span class="right muted">{{ entry.bannedAt ? dateTime(entry.bannedAt) : 'Undated' }}</span>
             </div>
@@ -142,6 +202,48 @@ async function ban(): Promise<void> {
 
 .ban {
     min-height: 44px;
+}
+
+/* The linked ban list strip under the toolbar. */
+.linked {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 11px;
+    padding: 9px 35px;
+    border-bottom: 1px solid var(--line-soft);
+    background: var(--panel);
+    font-size: 14px;
+}
+
+.linked-icon {
+    width: 15.5px;
+    height: 15.5px;
+    flex: none;
+    color: var(--accent);
+}
+
+.linked-text {
+    flex: 1;
+    min-width: 0;
+    color: var(--text-2);
+}
+
+.reason {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+}
+
+.reason .truncate {
+    min-width: 0;
+}
+
+.mark {
+    height: 22px;
+    flex: none;
+    font-size: 12px;
 }
 
 .id {

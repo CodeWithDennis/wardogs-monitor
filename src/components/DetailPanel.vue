@@ -5,8 +5,9 @@ import MapArt from '@/components/MapArt.vue';
 import { ago, dateTime, formatUptime, gameName, modeName, modifierNames, number, percent, pingLevel, ratio, steamProfileUrl, zoneName } from '@/lib/format';
 import { mapName } from '@/lib/maps';
 import { killPlayer, openPlayerAction } from '@/lib/playerActions';
+import { liftBan } from '@/lib/banlists';
 import { isWatched, setWatchNote, toggleWatch, watchedEntry } from '@/lib/watchlist';
-import { act, now, openMini, openView, refreshLive, selectedLive, selectedServer, state, toast, togglePanel } from '@/lib/store';
+import { now, openMini, openView, refreshLive, selectedLive, selectedServer, state, toast, togglePanel } from '@/lib/store';
 import type { Ban } from '@/types';
 
 /**
@@ -130,11 +131,10 @@ function broadcast(): void {
     requestAnimationFrame(() => document.getElementById('broadcast')?.focus());
 }
 
+/** On a linked server this also offers to lift it on every linked server. */
 function unban(entry: Ban): void {
-    act('unban', { steamId: entry.steamId }, {
-        confirm: { title: 'Lift this ban?', body: `${entry.steamId} can join the server again straight away.`, confirmLabel: 'Unban' },
-    }).then((result) => {
-        if (result?.ok) {
+    liftBan(entry).then((lifted) => {
+        if (lifted) {
             state.selectedBan = null;
         }
     });

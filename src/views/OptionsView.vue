@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ArrowDown, ArrowUp, Check, ExternalLink, Minus, Pencil, Plus, RotateCcw, Star, Trash2 } from 'lucide-vue-next';
 import { computed, onMounted, ref } from 'vue';
+import BanListsPanel from '@/components/BanListsPanel.vue';
 import LicencePanel from '@/components/LicencePanel.vue';
 import MapArt from '@/components/MapArt.vue';
 import ViewHeader from '@/components/ViewHeader.vue';
+import { banLists } from '@/lib/banlists';
 import { ago, steamProfileUrl } from '@/lib/format';
 import { mapName } from '@/lib/maps';
 import { now, removeServer, state, toast } from '@/lib/store';
@@ -11,7 +13,7 @@ import { ACCENTS, FONTS, THEMES } from '@/lib/themes';
 import { setWatchNote, toggleWatch } from '@/lib/watchlist';
 import type { Preferences } from '@/types';
 
-/** How the app looks and behaves, broadcasts, the watchlist, saved servers and shortcuts. */
+/** How the app looks and behaves, broadcasts, the watchlist, saved servers, linked ban lists and shortcuts. */
 const tab = computed({ get: () => state.optionsTab, set: (value: string) => (state.optionsTab = value) });
 const tabs = computed(() => [
     { id: 'general', label: 'General' },
@@ -20,6 +22,7 @@ const tabs = computed(() => [
     { id: 'broadcasts', label: 'Broadcasts', count: state.preferences.broadcasts.length },
     { id: 'watchlist', label: 'Watchlist', count: state.preferences.watchlist.length },
     { id: 'servers', label: 'Servers', count: state.servers.length },
+    { id: 'banlists', label: 'Ban lists', count: banLists.groups.length },
     { id: 'shortcuts', label: 'Shortcuts' },
 ]);
 
@@ -185,7 +188,7 @@ const SHORTCUTS = [
             <div class="group">
                 <div class="group-text">
                     <h3>Your data</h3>
-                    <p class="muted">Saved servers (passwords encrypted for your Windows account), preferences and the activity log.</p>
+                    <p class="muted">Saved servers (passwords encrypted for your Windows account), preferences, linked ban lists and the activity log.</p>
                 </div>
                 <p class="mono path">{{ dataPath }}</p>
             </div>
@@ -355,6 +358,8 @@ const SHORTCUTS = [
                 </button>
             </div>
         </template>
+
+        <BanListsPanel v-else-if="tab === 'banlists'" />
 
         <template v-else>
             <div v-for="[keys, what] in SHORTCUTS" :key="keys" class="shortcut">

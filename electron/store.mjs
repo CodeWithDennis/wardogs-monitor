@@ -2,13 +2,15 @@ import { app, safeStorage } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { readGroups, toFile } from './banlists.mjs';
 import { change, resolve } from './preferences.mjs';
 
 /**
  * The app's own files in its data folder under %APPDATA%: the saved
- * servers, preferences and a local log of every action taken. RCON
- * passwords are encrypted with Windows DPAPI (Electron's safeStorage), so
- * only this Windows account can read them, and they never reach the window.
+ * servers, preferences, linked ban lists and a local log of every action
+ * taken. RCON passwords are encrypted with Windows DPAPI (Electron's
+ * safeStorage), so only this Windows account can read them, and they never
+ * reach the window.
  */
 
 const file = (name) => path.join(app.getPath('userData'), name);
@@ -154,5 +156,43 @@ export const activity = {
             .filter((entry) => entry && (!serverId || entry.serverId === serverId))
             .reverse()
             .slice(0, limit);
+    },
+};
+
+/**
+ * Linked ban lists (see banlists.mjs), in banlists.json. Changes are made
+ * one after another, so a ban recorded while a sync finishes is never lost
+ * to two writes racing.
+ */
+let banListQueue = Promise.resolve();
+
+export const banLists = {
+    /** @returns {Promise<import('./banlists.mjs').BanGroup[]>} */
+    async list() {
+        return readGroups(await readJson('banlists.json', {}));
+    },
+
+    /**
+     * Change the groups: `change` gets them as stored and returns the new
+     * list (or nothing to leave them as they are), plus anything to hand back.
+     *
+     * @template T
+     * @param {(groups: import('./banlists.mjs').BanGroup[]) => { groups?: import('./banlists.mjs').BanGroup[], result?: T } | Promise<{ groups?: import('./banlists.mjs').BanGroup[], result?: T }>} change
+     * @returns {Promise<T | undefined>}
+     */
+    update(change) {
+        const run = banListQueue.then(async () => {
+            const { groups, result } = await change(await this.list());
+
+            if (groups) {
+                await writeJson('banlists.json', toFile(groups));
+            }
+
+            return result;
+        });
+
+        banListQueue = run.catch(() => undefined);
+
+        return run;
     },
 };

@@ -1,6 +1,7 @@
 import { rcon, RconError, BROADCAST_MAX, MESSAGE_MAX, REASON_MAX } from './rcon.mjs';
 import { isWritable, rotationValues, SESSION, settingsValues, validateRotation, validateSettings, WardogsConfig, writeField, FIELDS } from './config.mjs';
-import { activity, servers } from './store.mjs';
+import { afterSync, applyPlan, planSync, recordBan, recordUnban } from './banlists.mjs';
+import { activity, banLists, servers } from './store.mjs';
 
 /**
  * What the window asks for, shaped the way the website's
@@ -476,7 +477,7 @@ export async function act(serverId, name, args = {}) {
     }
 
     try {
-        const summary = await action.run(await servers.target(serverId), args);
+        const summary = (await action.run(await servers.target(serverId), args)) + (await noteBanList(serverId, name, args));
         forget(serverId, ...action.forget);
         await activity.add({ serverId, serverName: server.name, action: name, summary, ok: true });
 
@@ -490,6 +491,179 @@ export async function act(serverId, name, args = {}) {
 
         return { ok: false, error: message(error), configChanged: error instanceof RconError && error.configChanged };
     }
+}
+
+/**
+ * A ban made on a linked server joins its group's shared list, so the next
+ * sync spreads it. An unban only leaves the list when the user chose to
+ * lift it on every linked server (`everywhere`); lifted here only, the
+ * next sync would ban them here again, which the window warns about.
+ * Returns what to add to the log line. The ban itself already happened, so
+ * a problem with the list file never makes it look failed.
+ */
+async function noteBanList(serverId, name, args) {
+    if (name !== 'ban' && !(name === 'unban' && args?.everywhere === true)) {
+        return '';
+    }
+
+    try {
+        const steamId = String(args.steamId ?? '').trim();
+        const group = await banLists.update((groups) => {
+            const changed = name === 'ban'
+                ? recordBan(groups, serverId, { steamId, reason: String(args.reason ?? '').trim().slice(0, REASON_MAX) || null })
+                : recordUnban(groups, serverId, steamId);
+
+            return changed.group ? { groups: changed.groups, result: changed.group } : {};
+        });
+
+        if (!group) {
+            return '';
+        }
+
+        return name === 'ban' ? ` · added to “${group.name}”` : ` · lifted on “${group.name}”`;
+    } catch {
+        return '';
+    }
+}
+
+/**
+ * Read the bans of every server in a group, fresh. A server that is gone,
+ * locked by the licence or not answering is skipped with the reason.
+ *
+ * @param {import('./banlists.mjs').BanGroup} group
+ * @param {(serverId: string) => Promise<boolean>} isLocked
+ */
+async function readLinked(group, isLocked) {
+    const saved = await servers.list();
+
+    return Promise.all(
+        group.serverIds.map(async (serverId) => {
+            const server = saved.find((entry) => entry.id === serverId);
+
+            if (!server) {
+                return { serverId, serverName: 'A removed server', skipped: 'It is no longer saved in the app.' };
+            }
+
+            if (await isLocked(serverId)) {
+                return { serverId, serverName: server.name, skipped: 'Locked: the free trial has ended.' };
+            }
+
+            forget(serverId, 'bans');
+            const answer = await bans(serverId);
+
+            return answer.error ? { serverId, serverName: server.name, skipped: answer.error } : { serverId, serverName: server.name, bans: answer.bans };
+        }),
+    );
+}
+
+/** A plan as the window sees it: the changes per server, not the whole shared list. */
+const publicPlan = (plan) => ({
+    groupId: plan.groupId,
+    groupName: plan.groupName,
+    sharedCount: plan.shared.length,
+    servers: plan.servers,
+    skipped: plan.skipped,
+    missing: plan.missing,
+    lifting: plan.lifting,
+    serversBehind: plan.serversBehind,
+    fingerprint: plan.fingerprint,
+    checkedAt: new Date().toISOString(),
+});
+
+/**
+ * What syncing a group would change, read fresh from its servers. Writes
+ * nothing.
+ *
+ * @param {string} groupId
+ * @param {(serverId: string) => Promise<boolean>} isLocked
+ */
+export async function banListPlan(groupId, isLocked) {
+    const group = (await banLists.list()).find((entry) => entry.id === groupId);
+
+    if (!group) {
+        return { ok: false, error: 'That ban list no longer exists.' };
+    }
+
+    return { ok: true, plan: publicPlan(planSync(group, await readLinked(group, isLocked))) };
+}
+
+/**
+ * Sync a group after the user confirmed its preview. The plan is read
+ * fresh and only written when it is exactly the one they confirmed
+ * (`confirmed` is its fingerprint); otherwise the new plan comes back to
+ * be confirmed again. Every change is logged like an action.
+ *
+ * @param {string} groupId
+ * @param {string} confirmed
+ * @param {(serverId: string) => Promise<boolean>} isLocked
+ */
+export async function banListSync(groupId, confirmed, isLocked) {
+    if (syncing.has(groupId)) {
+        return { ok: false, error: 'This ban list is syncing already.' };
+    }
+
+    syncing.add(groupId);
+
+    try {
+        return await syncGroup(groupId, confirmed, isLocked);
+    } catch (error) {
+        return { ok: false, error: message(error) };
+    } finally {
+        syncing.delete(groupId);
+    }
+}
+
+/** Groups being synced now, so a double click never sends the same writes twice. */
+const syncing = new Set();
+
+async function syncGroup(groupId, confirmed, isLocked) {
+    const group = (await banLists.list()).find((entry) => entry.id === groupId);
+
+    if (!group) {
+        return { ok: false, error: 'That ban list no longer exists.' };
+    }
+
+    const plan = planSync(group, await readLinked(group, isLocked));
+
+    if (plan.fingerprint !== confirmed) {
+        return { ok: false, changed: true, error: 'The bans changed since the preview. Check the new differences and confirm again.', plan: publicPlan(plan) };
+    }
+
+    /** @type {Record<string, import('./rcon.mjs').Target>} */
+    const targets = {};
+
+    for (const server of plan.servers) {
+        targets[server.serverId] = await servers.target(server.serverId);
+    }
+
+    const names = Object.fromEntries(plan.servers.map((server) => [server.serverId, server.serverName]));
+
+    const summary = await applyPlan(plan, {
+        ban: (serverId, ban) => rcon.ban(targets[serverId], ban.steamId, ban.reason ? ban.reason.slice(0, REASON_MAX) : null),
+        unban: (serverId, steamId) => rcon.unban(targets[serverId], steamId),
+        logged: (serverId, change) => activity.add({
+            serverId,
+            serverName: names[serverId],
+            action: change.kind === 'add' ? 'ban' : 'unban',
+            summary: change.kind === 'add'
+                ? `Banned ${change.steamId}${change.reason ? `: ${change.reason}` : ''} · synced from “${group.name}”`
+                : `Unbanned ${change.steamId} · lifted on “${group.name}”`,
+            ok: change.ok,
+            ...(change.error ? { error: change.error } : {}),
+        }),
+    });
+
+    for (const server of plan.servers) {
+        forget(server.serverId, 'bans', 'live');
+    }
+
+    await banLists.update((groups) => {
+        const current = groups.find((entry) => entry.id === groupId);
+
+        return current ? { groups: groups.map((entry) => (entry.id === groupId ? afterSync(current, group, plan) : entry)) } : {};
+    });
+
+    return { ok: true, groupId, groupName: group.name, ...summary };
 }
 
 /**

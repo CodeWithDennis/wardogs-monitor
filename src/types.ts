@@ -153,6 +153,52 @@ export interface ActivityEntry {
     error?: string;
 }
 
+/** Servers linked to share one ban list; the list itself is kept on this PC. */
+export interface BanGroup {
+    id: string;
+    name: string;
+    serverIds: string[];
+    /** Bans on the shared list as of the last sync or ban through the app. */
+    banCount: number;
+    /** Bans lifted through the app that a sync lifts everywhere. */
+    liftedCount: number;
+    createdAt: string;
+    lastSyncedAt: string | null;
+}
+
+export interface SharedBan {
+    steamId: string;
+    reason: string | null;
+    bannedAt: string | null;
+    bannedBy?: string | null;
+    sourceServerId?: string | null;
+}
+
+/** What a sync would change, per server. Reading it changes nothing. */
+export interface BanSyncPlan {
+    groupId: string;
+    groupName: string;
+    sharedCount: number;
+    servers: { serverId: string; serverName: string; toAdd: SharedBan[]; toRemove: { steamId: string; removedAt: string }[] }[];
+    skipped: { serverId: string; serverName: string; reason: string }[];
+    missing: number;
+    lifting: number;
+    serversBehind: number;
+    fingerprint: string;
+    checkedAt: string;
+}
+
+export interface BanSyncSummary {
+    ok: true;
+    groupId: string;
+    groupName: string;
+    servers: { serverId: string; serverName: string; added: number; removed: number; failures: { kind: 'add' | 'remove'; steamId: string; error: string }[] }[];
+    skipped: { serverId: string; serverName: string; reason: string }[];
+    added: number;
+    removed: number;
+    failed: number;
+}
+
 export interface WatchedPlayer {
     steamId: string;
     name: string;
@@ -210,6 +256,14 @@ export interface PanelApi {
         refresh(id: string): Promise<void>;
     };
     activity: { list(serverId?: string | null): Promise<ActivityEntry[]> };
+    banLists: {
+        list(): Promise<BanGroup[]>;
+        save(input: { id?: string; name?: string; serverIds?: string[] }): Promise<{ ok: true; group: BanGroup } | { ok: false; error: string }>;
+        remove(id: string): Promise<void>;
+        plan(groupId: string): Promise<{ ok: true; plan: BanSyncPlan } | { ok: false; error: string }>;
+        /** Writes only when `fingerprint` matches a fresh plan; otherwise hands that plan back. */
+        sync(groupId: string, fingerprint: string): Promise<BanSyncSummary | { ok: false; error: string; changed?: boolean; plan?: BanSyncPlan }>;
+    };
     license: {
         status(): Promise<LicenceStatus>;
         activate(key: string): Promise<{ ok: true; status: LicenceStatus } | { ok: false; error: string }>;

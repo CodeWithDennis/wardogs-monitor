@@ -13,6 +13,10 @@ import path from 'node:path';
  *
  *   npm run mock               → http://127.0.0.1:47990/v1, password "mock-secret"
  *   node mock/wardogs-mock.mjs 47991 other-password
+ *
+ * Each instance keeps its own bans, so two of them on different ports make
+ * two servers with different ban lists (for linked ban lists). `bans`
+ * replaces the one ban every instance starts with.
  */
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -44,7 +48,7 @@ const pick = (list) => list[Math.floor(Math.random() * list.length)];
 const between = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
 
 /**
- * @param {{ port?: number, password?: string, quiet?: boolean }} [options]
+ * @param {{ port?: number, password?: string, quiet?: boolean, bans?: { steamId: string, reason?: string | null, bannedAtUtc?: string }[] }} [options]
  * @returns {Promise<{ port: number, password: string, close: () => Promise<void> }>}
  */
 export async function startMockServer(options = {}) {
@@ -66,7 +70,9 @@ export async function startMockServer(options = {}) {
         rotationIndex: 0,
         pendingMap: null,
         players: [],
-        bans: [{ steamId: '76561198000000002', bannedAtUtc: '2026-09-01T12:00:00.000Z', bannedBy: 'rcon', reason: 'Cheating' }],
+        bans: options.bans
+            ? options.bans.map((ban) => ({ steamId: ban.steamId, bannedAtUtc: ban.bannedAtUtc ?? new Date().toISOString(), bannedBy: 'rcon', reason: ban.reason ?? null }))
+            : [{ steamId: '76561198000000002', bannedAtUtc: '2026-09-01T12:00:00.000Z', bannedBy: 'rcon', reason: 'Cheating' }],
         messages: [],
     };
 
@@ -265,6 +271,8 @@ export async function startMockServer(options = {}) {
             return { message: 'Sent.' };
         }],
         ['POST', /^bans$/, (_, body) => {
+            // Banning someone banned already replaces their ban, so the list never holds them twice.
+            state.bans = state.bans.filter((ban) => ban.steamId !== body.steamId);
             state.bans.push({ steamId: body.steamId, bannedAtUtc: new Date().toISOString(), bannedBy: 'rcon', reason: body.reason ?? null });
             state.players = state.players.filter((player) => player.steamId !== body.steamId);
 
