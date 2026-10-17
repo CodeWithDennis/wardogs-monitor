@@ -103,9 +103,9 @@ export function resolve(raw) {
     next.refreshSeconds = Math.min(60, Math.max(2, Math.round(Number(next.refreshSeconds) || DEFAULT_PREFERENCES.refreshSeconds)));
     next.miniOpacity = Math.min(1, Math.max(0.5, Number(next.miniOpacity) || DEFAULT_PREFERENCES.miniOpacity));
     next.watchlist = (Array.isArray(next.watchlist) ? next.watchlist : [])
-        .filter((entry) => /^\d{17}$/.test(String(entry?.steamId ?? '')))
+        .filter((entry) => /^[\w.:-]{1,64}$/.test(String(entry?.steamId ?? '').trim()))
         .slice(0, 500)
-        .map((entry) => ({ steamId: String(entry.steamId), name: text(entry.name, 64), note: text(entry.note, 200), addedAt: text(entry.addedAt, 40) || new Date().toISOString() }));
+        .map((entry) => ({ steamId: String(entry.steamId).trim(), name: text(entry.name, 64), note: text(entry.note, 200), addedAt: text(entry.addedAt, 40) || new Date().toISOString() }));
     next.broadcasts = (Array.isArray(next.broadcasts) ? next.broadcasts : DEFAULT_BROADCASTS).map((entry) => text(entry, 200)).filter(Boolean).slice(0, 30);
     next.zoom = nearestZoom(Number(next.zoom) || 1);
     next.miniZoom = nearestZoom(Number(next.miniZoom) || 1);

@@ -17,42 +17,49 @@ export function watchedEntry(steamId: string): WatchedPlayer | null {
     return state.preferences.watchlist.find((entry) => entry.steamId === steamId) ?? null;
 }
 
-async function save(watchlist: WatchedPlayer[]): Promise<void> {
-    state.preferences = await window.panel.preferences.set({ watchlist });
+let queue: Promise<unknown> = Promise.resolve();
+
+/**
+ * Change the list one change after another, each on the list as the last
+ * one left it: two stars clicked quickly would otherwise both start from
+ * the same old list, and the second save would drop the first star.
+ */
+function save(change: (watchlist: WatchedPlayer[]) => WatchedPlayer[]): Promise<void> {
+    const run = queue.then(async () => {
+        state.preferences = await window.panel.preferences.set({ watchlist: change(state.preferences.watchlist) });
+    });
+    queue = run.catch(() => undefined);
+
+    return run;
 }
 
 export async function toggleWatch(player: { steamId: string; name: string }): Promise<void> {
-    if (isWatched(player.steamId)) {
-        await save(state.preferences.watchlist.filter((entry) => entry.steamId !== player.steamId));
+    const watching = !isWatched(player.steamId);
+
+    await save((watchlist) =>
+        watching
+            ? [...watchlist.filter((entry) => entry.steamId !== player.steamId), { steamId: player.steamId, name: player.name, note: '', addedAt: new Date().toISOString() }]
+            : watchlist.filter((entry) => entry.steamId !== player.steamId),
+    );
+
+    if (isWatched(player.steamId) !== watching) {
+        toast('error', watching ? `Could not watch ${player.name}` : `Could not stop watching ${player.name}`, 'The watch list could not be saved. Try again.');
+    } else if (watching) {
+        toast('info', `Watching ${player.name}`, 'You get a notice when they join any server.');
+    } else {
         toast('info', `Stopped watching ${player.name}`);
-
-        return;
     }
-
-    await save([...state.preferences.watchlist, { steamId: player.steamId, name: player.name, note: '', addedAt: new Date().toISOString() }]);
-    toast('info', `Watching ${player.name}`, 'You get a notice when they join any server.');
 }
 
 export async function setWatchNote(steamId: string, note: string): Promise<void> {
-    await save(state.preferences.watchlist.map((entry) => (entry.steamId === steamId ? { ...entry, note } : entry)));
+    await save((watchlist) => watchlist.map((entry) => (entry.steamId === steamId ? { ...entry, note } : entry)));
 }
 
 /** Keep the saved name current when a watched player renames. */
 export async function refreshWatchedNames(players: { steamId: string; name: string }[]): Promise<void> {
-    let changed = false;
-    const next = state.preferences.watchlist.map((entry) => {
-        const seen = players.find((player) => player.steamId === entry.steamId);
+    const renamed = (entry: WatchedPlayer) => players.find((player) => player.steamId === entry.steamId && player.name !== entry.name);
 
-        if (seen && seen.name !== entry.name) {
-            changed = true;
-
-            return { ...entry, name: seen.name };
-        }
-
-        return entry;
-    });
-
-    if (changed) {
-        await save(next);
+    if (state.preferences.watchlist.some(renamed)) {
+        await save((watchlist) => watchlist.map((entry) => ({ ...entry, name: renamed(entry)?.name ?? entry.name })));
     }
 }
