@@ -96,11 +96,11 @@ function open(id: Section): void {
     border-left: 2px solid transparent;
     background: transparent;
     color: var(--muted);
-    font-family: var(--font-title);
-    font-size: calc(11px * var(--title-scale, 1));
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    font-family: var(--font-body);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.2;
+    letter-spacing: 0.01em;
     transition:
         color 0.12s,
         background 0.12s;

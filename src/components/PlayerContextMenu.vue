@@ -97,26 +97,26 @@ onUnmounted(() => {
     position: fixed;
     z-index: 70;
     width: 231px;
-    padding: 5.5px;
-    border: 1px solid var(--line);
-    border-top: 1px solid var(--accent-line);
-    border-radius: var(--radius);
+    padding: 5px;
+    border: 1px solid var(--pop-line);
+    border-top-color: var(--accent-line);
+    border-radius: var(--radius-pop);
     background: var(--panel);
-    box-shadow: 0 20px 48.5px rgb(0 0 0 / 0.5);
+    box-shadow: var(--shadow-pop);
     animation: rise 0.1s ease;
     -webkit-app-region: no-drag;
 }
 
 .who {
     display: grid;
-    padding: 6.5px 11px 9px;
+    padding: 6px 10px 8px;
     border-bottom: 1px solid var(--line-soft);
-    margin-bottom: 4.5px;
+    margin-bottom: 5px;
 }
 
 .who strong {
     font-weight: 600;
-    font-size: 14.5px;
+    font-size: 14px;
 }
 
 .who small {
@@ -127,15 +127,15 @@ onUnmounted(() => {
 button {
     display: flex;
     align-items: center;
-    gap: 11px;
+    gap: 10px;
     width: 100%;
-    height: 35px;
-    padding: 0 11px;
+    height: 34px;
+    padding: 0 10px;
     border: 0;
     border-radius: var(--radius);
     background: transparent;
     color: var(--text-2);
-    font-size: 14.5px;
+    font-size: 14px;
     text-align: left;
 }
 
@@ -145,13 +145,19 @@ button:hover {
 }
 
 button svg {
-    width: 15.5px;
-    height: 15.5px;
+    width: 16px;
+    height: 16px;
+    flex: none;
     color: var(--muted);
 }
 
+button:hover svg {
+    color: var(--text-2);
+}
+
 .bad,
-.bad svg {
+.bad svg,
+.bad:hover svg {
     color: var(--bad);
 }
 
@@ -162,7 +168,7 @@ button svg {
 
 .divider {
     height: 1px;
-    margin: 4.5px;
+    margin: 5px 4px;
     background: var(--line-soft);
 }
 </style>

@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { Megaphone, RotateCcw, Send, SkipForward, WifiOff } from 'lucide-vue-next';
+import { Lock, Megaphone, RotateCcw, Send, SkipForward, WifiOff } from 'lucide-vue-next';
 import { computed, onMounted, ref, watch } from 'vue';
 import FactionScores from '@/components/FactionScores.vue';
 import PlayerChart from '@/components/PlayerChart.vue';
 import ViewHeader from '@/components/ViewHeader.vue';
 import { ago, formatUptime, modeName, ratio } from '@/lib/format';
+import { BILLING_URL, openBilling } from '@/lib/licence';
 import { mapName } from '@/lib/maps';
 import { openPlayerMenu } from '@/lib/playerActions';
 import { act, busy, now, openOptions, openView, selectedLive, selectedServer, state } from '@/lib/store';
@@ -64,6 +65,7 @@ function openPlayer(steamId: string): void {
                 <span class="live"><span class="dot online" /> Live</span>
                 · {{ mapName(status.map) }} · {{ modeName(status.experiences) }} · up {{ formatUptime(live.uptimeSeconds ?? 0) }}
             </template>
+            <template v-else-if="live?.locked">Locked</template>
             <template v-else-if="live">Offline · checked {{ ago(live.checkedAt, now) }}</template>
             <template v-else>Connecting…</template>
         </template>
@@ -71,10 +73,11 @@ function openPlayer(steamId: string): void {
 
     <div class="view-body">
         <div v-if="live && !live.online" class="card offline">
-            <WifiOff />
+            <component :is="live.locked ? Lock : WifiOff" />
             <div>
-                <strong>The server is not answering</strong>
+                <strong>{{ live.locked ? 'This server is locked' : 'The server is not answering' }}</strong>
                 <p>{{ live.error }}</p>
+                <button v-if="live.lockedBy === 'plan' && BILLING_URL" type="button" class="btn btn-primary btn-sm" @click="openBilling">Upgrade</button>
             </div>
         </div>
 
@@ -334,5 +337,9 @@ section + .split,
 .offline p {
     margin: 4.5px 0 0;
     color: var(--text-2);
+}
+
+.offline .btn {
+    margin-top: 12px;
 }
 </style>

@@ -32,11 +32,19 @@ defineProps<{ placeholder: string; count?: number | null }>();
     border: 1px solid var(--line);
     border-radius: var(--radius);
     background: var(--input);
-    transition: border-color 0.12s;
+    transition:
+        border-color 0.12s,
+        box-shadow 0.12s;
 }
 
+.search-field:hover {
+    border-color: var(--line-strong);
+}
+
+/* The same focus ring as .input. */
 .search-field:focus-within {
     border-color: var(--accent-line);
+    box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .icon {

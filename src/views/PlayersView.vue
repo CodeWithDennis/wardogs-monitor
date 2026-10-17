@@ -265,6 +265,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
     color: var(--text-2);
 }
 
+.sortable:focus-visible {
+    outline: none;
+    color: var(--text-2);
+    box-shadow: 0 2px 0 var(--accent-line);
+}
+
 .sortable.sorted {
     color: var(--accent);
 }
@@ -295,10 +301,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
 }
 
 .head {
-    height: 37.5px;
+    height: 38px;
     color: var(--faint);
-    font-size: 12.5px;
-    letter-spacing: 0.08em;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
 }
 

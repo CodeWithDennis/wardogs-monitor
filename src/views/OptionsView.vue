@@ -226,7 +226,7 @@ const SHORTCUTS = [
             <div class="group">
                 <div class="group-text">
                     <h3>Headline font</h3>
-                    <p class="muted">Titles, buttons and labels. Body text stays Inter. Barlow Condensed is the website's.</p>
+                    <p class="muted">Titles, headings and big numbers. Buttons, labels and body text stay Inter. Barlow Condensed is the website's.</p>
                 </div>
                 <div class="fonts">
                     <button
@@ -439,14 +439,13 @@ const SHORTCUTS = [
 }
 
 .zoom .btn:not(.btn-ghost) {
-    width: 37.5px;
+    width: 36px;
     padding: 0;
 }
 
 .zoom-value {
     width: 59.5px;
     text-align: center;
-    font-family: var(--font-title);
     font-weight: 600;
 }
 
@@ -541,10 +540,6 @@ const SHORTCUTS = [
     white-space: nowrap;
 }
 
-.font .theme-text strong {
-    font-family: var(--f-family);
-}
-
 .themes-label {
     margin-top: 28.5px;
 }
@@ -632,15 +627,13 @@ const SHORTCUTS = [
     min-width: 0;
 }
 
+/* Card names are Inter like the other labels; a font card's sample above shows the font itself. */
 .theme-text strong {
     display: flex;
     align-items: center;
     gap: 6.5px;
-    font-family: var(--font-title);
-    font-size: calc(14px * var(--title-scale, 1));
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    font-size: 14.5px;
+    font-weight: 600;
 }
 
 .theme-text strong svg {
@@ -815,17 +808,15 @@ const SHORTCUTS = [
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 11px;
+    gap: 8px;
     height: 70.5px;
     border: 1px dashed var(--line-strong);
     border-radius: var(--radius);
     background: transparent;
     color: var(--text-2);
-    font-family: var(--font-title);
-    font-size: calc(14px * var(--title-scale, 1));
+    font-size: 14px;
     font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    letter-spacing: 0.01em;
     transition:
         border-color 0.12s,
         color 0.12s;
@@ -837,8 +828,8 @@ const SHORTCUTS = [
 }
 
 .add-server svg {
-    width: 17.5px;
-    height: 17.5px;
+    width: 16px;
+    height: 16px;
     color: var(--accent);
 }
 

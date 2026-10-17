@@ -133,6 +133,20 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
     border-right: 0;
 }
 
+/*
+ * How much of the page's top-right corner the window's own buttons cover:
+ * nothing while the open detail panel sits beside it (they are over the
+ * panel then), the whole caption width when the page runs to the window's
+ * edge. Banners and view headers keep that much clear.
+ */
+.content {
+    --caption-clear: var(--caption-w);
+}
+
+.content:has(+ .detail:not(.collapsed)) {
+    --caption-clear: 0px;
+}
+
 .boot {
     display: grid;
     place-items: center;
