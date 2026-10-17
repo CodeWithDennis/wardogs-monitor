@@ -300,24 +300,6 @@ async function captureDialogs({ mainWindow, run, click, shot }) {
     await shot('38-match-picker');
     await cancel();
 
-    for (const font of ['oxanium', 'black-ops-one']) {
-        await run(`window.panel.preferences.set({ titleFont: '${font}' })`);
-        await wait(600);
-        await click('[data-view="players"]');
-        await wait(1000);
-        await shot(`40-${font}-players`);
-        await click('[data-section="servers"]');
-        await wait(1000);
-        await shot(`41-${font}-servers`);
-        await click('.view-header .actions .btn-primary');
-        await wait(500);
-        await shot(`42-${font}-add-server`);
-        await cancel();
-        await click('[data-section="control"]');
-        await wait(600);
-    }
-
-    await run(`window.panel.preferences.set({ titleFont: 'barlow-condensed' })`);
     mainWindow.setSize(1500, 920);
     await wait(800);
 }

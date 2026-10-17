@@ -388,7 +388,7 @@ function unban(entry: Ban): void {
 .strip-count strong {
     color: var(--text);
     font-family: var(--font-title);
-    font-size: calc(15.5px * var(--title-scale, 1));
+    font-size: 15.5px;
     font-weight: 700;
 }
 

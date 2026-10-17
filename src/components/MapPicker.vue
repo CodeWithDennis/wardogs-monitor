@@ -156,7 +156,7 @@ function toggleModifier(id: string): void {
     padding: 20px 13px 10px;
     background: linear-gradient(180deg, transparent, rgb(8 11 22 / 0.85));
     font-family: var(--font-title);
-    font-size: calc(16.5px * var(--title-scale, 1));
+    font-size: 16.5px;
 }
 
 .map-name small {

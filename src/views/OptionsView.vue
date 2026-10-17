@@ -9,7 +9,7 @@ import { banLists } from '@/lib/banlists';
 import { ago, steamProfileUrl } from '@/lib/format';
 import { mapName } from '@/lib/maps';
 import { now, removeServer, state, toast } from '@/lib/store';
-import { ACCENTS, FONTS, THEMES } from '@/lib/themes';
+import { ACCENTS, THEMES } from '@/lib/themes';
 import { setWatchNote, toggleWatch } from '@/lib/watchlist';
 import type { Preferences } from '@/types';
 
@@ -223,29 +223,6 @@ const SHORTCUTS = [
                 </div>
             </div>
 
-            <div class="group">
-                <div class="group-text">
-                    <h3>Headline font</h3>
-                    <p class="muted">Titles, headings and big numbers. Buttons, labels and body text stay Inter. Barlow Condensed is the website's.</p>
-                </div>
-                <div class="fonts">
-                    <button
-                        v-for="font in FONTS"
-                        :key="font.value"
-                        type="button"
-                        class="font"
-                        :class="{ on: state.preferences.titleFont === font.value }"
-                        :style="{ '--f-family': font.family, '--f-scale': font.scale }"
-                        @click="set({ titleFont: font.value })"
-                    >
-                        <span class="font-sample">Wardogs <span class="gold">Monitor</span></span>
-                        <span class="theme-text">
-                            <strong>{{ font.label }} <Check v-if="state.preferences.titleFont === font.value" /></strong>
-                            <small class="muted">{{ font.description }}</small>
-                        </span>
-                    </button>
-                </div>
-            </div>
 
             <div class="section-label themes-label">
                 <span>Theme</span>
@@ -488,56 +465,6 @@ const SHORTCUTS = [
 .accent-swatch svg {
     width: 14.5px;
     height: 14.5px;
-}
-
-/* Each card shows the wordmark in its own font, whatever the app is using now. */
-.fonts {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 9px;
-}
-
-.font {
-    display: grid;
-    align-content: start;
-    gap: 9px;
-    padding: 13px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    background: transparent;
-    text-align: left;
-    transition: border-color 0.12s;
-    container-type: inline-size;
-    /* No fake bold on the one-weight fonts, whichever font the app is using. */
-    font-synthesis-weight: none;
-}
-
-.font:hover {
-    border-color: var(--line-strong);
-}
-
-.font.on {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent) inset;
-}
-
-.font-sample {
-    display: flex;
-    align-items: center;
-    gap: 0.3em;
-    height: 46px;
-    padding: 0 11px;
-    overflow: hidden;
-    border-radius: 3.5px;
-    background: var(--raise);
-    font-family: var(--f-family);
-    /* Shrinks in a narrow card, so the widest fonts still fit on one line. */
-    font-size: calc(min(20px, (100cqi - 22px) / 12.5) * var(--f-scale));
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    line-height: 1;
-    text-transform: uppercase;
-    white-space: nowrap;
 }
 
 .themes-label {

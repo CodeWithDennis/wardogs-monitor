@@ -237,7 +237,7 @@ const buy = () => BRAND.website && window.panel.openExternal(BRAND.website);
 .status-text h3 {
     margin: 0;
     font-family: var(--font-title);
-    font-size: calc(16.5px * var(--title-scale, 1));
+    font-size: 16.5px;
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
