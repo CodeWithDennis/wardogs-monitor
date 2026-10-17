@@ -68,6 +68,18 @@ export async function captureViews({ app, mainWindow, openMini, getMini, dir }) 
         await shot(`${String(index + 5).padStart(2, '0')}-${view}`);
     }
 
+    await run(`window.panel.preferences.set({ railCollapsed: true, sidebarCollapsed: true })`);
+    web.reload();
+    await new Promise((resolve) => web.once('did-finish-load', resolve));
+    await wait(3000);
+    await shot('10b-collapsed');
+    await run(`window.panel.preferences.set({ railCollapsed: false, sidebarCollapsed: false })`);
+    web.reload();
+    await new Promise((resolve) => web.once('did-finish-load', resolve));
+    await wait(3000);
+    await click('.server-card');
+    await wait(1000);
+
     await click('[data-view="players"]');
     await wait(600);
     await run(`document.querySelectorAll('.player')[2]?.click()`);

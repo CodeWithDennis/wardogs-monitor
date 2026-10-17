@@ -170,6 +170,8 @@ export interface Preferences {
     accent: string;
     zoom: number;
     miniZoom: number;
+    railCollapsed: boolean;
+    sidebarCollapsed: boolean;
     notifyServerDown: boolean;
     notifyWatched: boolean;
     watchlist: WatchedPlayer[];

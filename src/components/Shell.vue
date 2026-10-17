@@ -11,7 +11,7 @@ import ServerDialog from '@/components/ServerDialog.vue';
 import Sidebar from '@/components/Sidebar.vue';
 import Toasts from '@/components/Toasts.vue';
 import Welcome from '@/components/Welcome.vue';
-import { init, openView, refreshLive, section, selectedServer, state, VIEWS } from '@/lib/store';
+import { init, openView, refreshLive, section, selectedServer, state, togglePanel, VIEWS } from '@/lib/store';
 import ActivityView from '@/views/ActivityView.vue';
 import BansView from '@/views/BansView.vue';
 import MatchView from '@/views/MatchView.vue';
@@ -50,7 +50,10 @@ const showView = computed(() => (section.value === 'control' ? selectedServer.va
 function onKey(event: KeyboardEvent): void {
     const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement;
 
-    if (event.ctrlKey && event.key.toLowerCase() === 'h') {
+    if (event.ctrlKey && event.key.toLowerCase() === 'b') {
+        event.preventDefault();
+        togglePanel('sidebarCollapsed');
+    } else if (event.ctrlKey && event.key.toLowerCase() === 'h') {
         event.preventDefault();
         openView('servers');
     } else if (event.ctrlKey && /^[1-6]$/.test(event.key)) {
@@ -79,7 +82,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
 <template>
     <div class="shell">
         <IconRail />
-        <Sidebar />
+        <Transition name="slide">
+            <Sidebar v-if="!state.preferences.sidebarCollapsed" />
+        </Transition>
 
         <template v-if="state.ready">
             <main v-if="showView" class="content" :class="{ wide }">
@@ -122,6 +127,19 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
 
 .content.wide {
     border-right: 0;
+}
+
+.slide-enter-active,
+.slide-leave-active {
+    transition:
+        margin 0.18s ease,
+        opacity 0.18s ease;
+}
+
+.slide-enter-from,
+.slide-leave-to {
+    margin-left: calc(var(--side-w) * -1);
+    opacity: 0;
 }
 
 .boot {
