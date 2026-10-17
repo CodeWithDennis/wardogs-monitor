@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from 'vue';
+import BanListBanner from '@/components/BanListBanner.vue';
+import BanSyncDialog from '@/components/BanSyncDialog.vue';
 import CommandPalette from '@/components/CommandPalette.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import DetailPanel from '@/components/DetailPanel.vue';
@@ -11,6 +13,7 @@ import ServerDialog from '@/components/ServerDialog.vue';
 import Sidebar from '@/components/Sidebar.vue';
 import Toasts from '@/components/Toasts.vue';
 import Welcome from '@/components/Welcome.vue';
+import { startBanLists } from '@/lib/banlists';
 import { init, openView, refreshLive, section, selectedServer, state, togglePanel, VIEWS } from '@/lib/store';
 import ActivityView from '@/views/ActivityView.vue';
 import BansView from '@/views/BansView.vue';
@@ -73,6 +76,7 @@ function onKey(event: KeyboardEvent): void {
 
 onMounted(() => {
     init();
+    startBanLists();
     window.addEventListener('keydown', onKey);
 });
 
@@ -87,6 +91,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
         <template v-if="state.ready">
             <main v-if="showView" class="content" :class="{ wide }">
                 <LicenceBanner />
+                <BanListBanner :wide="wide" />
                 <component :is="current" :key="`${state.view}:${state.selectedId}`" />
             </main>
             <Welcome v-else />
@@ -102,6 +107,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
         <PlayerActionDialog />
         <PlayerContextMenu />
         <CommandPalette />
+        <BanSyncDialog />
         <ConfirmDialog />
         <Toasts />
     </div>
