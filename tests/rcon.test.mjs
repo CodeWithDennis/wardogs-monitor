@@ -17,7 +17,7 @@ test('reads status, players and health', async () => {
     const [status, players, health] = await Promise.all([rcon.status(target), rcon.players(target), rcon.health(target)]);
 
     assert.equal(status.map, 'Ozeti');
-    assert.equal(status.factionScores.length, 2);
+    assert.equal(status.factionScores.length, 3);
     assert.equal(players.length, status.players.current);
     assert.equal(health.status, 'ok');
 });
