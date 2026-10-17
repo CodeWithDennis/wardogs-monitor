@@ -78,38 +78,14 @@ export const ACCENTS: Accent[] = [
     { value: 'green', label: 'Field green', color: '#3fb97a', hover: '#55cd8e', ink: '#08170f' },
 ];
 
-/**
- * The headline font, for titles, buttons and uppercase labels (body text stays
- * Inter). Condensed faces read smaller than wide ones at the same size, so each
- * carries a scale the wordmark and the previews multiply their size by.
- */
-export interface Font {
-    value: string;
-    label: string;
-    description: string;
-    family: string;
-    scale: number;
-}
-
-export const FONTS: Font[] = [
-    { value: 'barlow-condensed', label: 'Barlow Condensed', description: "Tall and narrow, the website's stand-in for its DIN Condensed brand face.", family: "'Barlow Condensed', Impact, sans-serif", scale: 1.12 },
-    { value: 'oxanium', label: 'Oxanium', description: 'Wide and blocky with chamfered corners.', family: "'Oxanium', 'Barlow Condensed', Impact, sans-serif", scale: 1 },
-    { value: 'saira-stencil', label: 'Saira Stencil One', description: 'Stencilled, like paint on an ammo crate.', family: "'Saira Stencil One', 'Barlow Condensed', Impact, sans-serif", scale: 1 },
-    { value: 'russo-one', label: 'Russo One', description: 'Heavy and square, like the landing page.', family: "'Russo One', 'Barlow Condensed', Impact, sans-serif", scale: 1 },
-    { value: 'teko', label: 'Teko', description: 'Squared-off and compact, like a HUD readout.', family: "'Teko', 'Barlow Condensed', Impact, sans-serif", scale: 1.22 },
-    { value: 'black-ops-one', label: 'Black Ops One', description: 'Rough military stencil, loud and heavy.', family: "'Black Ops One', 'Barlow Condensed', Impact, sans-serif", scale: 0.92 },
-];
-
-/** Midnight with gold and Barlow Condensed, unless someone picks another. */
+/** Midnight with gold, unless someone picks another. */
 export const DEFAULT_THEME = 'midnight';
 export const DEFAULT_ACCENT = 'gold';
-export const DEFAULT_FONT = 'barlow-condensed';
 
-/** Put a theme, accent and headline font on the page, as the --t-*, --accent* and --font-title variables style.css reads. */
-export function applyTheme(themeValue: string | undefined, accentValue: string | undefined, fontValue?: string): void {
+/** Put a theme and accent on the page, as the --t-* and --accent* variables style.css reads. */
+export function applyTheme(themeValue: string | undefined, accentValue: string | undefined): void {
     const theme = THEMES.find((entry) => entry.value === (themeValue ?? DEFAULT_THEME)) ?? THEMES.find((entry) => entry.value === DEFAULT_THEME)!;
     const accent = ACCENTS.find((entry) => entry.value === (accentValue ?? DEFAULT_ACCENT)) ?? ACCENTS.find((entry) => entry.value === DEFAULT_ACCENT)!;
-    const font = FONTS.find((entry) => entry.value === (fontValue ?? DEFAULT_FONT)) ?? FONTS.find((entry) => entry.value === DEFAULT_FONT)!;
     const root = document.documentElement;
     const { palette } = theme;
 
@@ -126,9 +102,4 @@ export function applyTheme(themeValue: string | undefined, accentValue: string |
     root.style.setProperty('--accent', accent.color);
     root.style.setProperty('--accent-hi', accent.hover);
     root.style.setProperty('--accent-ink', accent.ink);
-
-    // data-font lets style.css stop single-weight fonts from being drawn fake-bold.
-    root.dataset.font = font.value;
-    root.style.setProperty('--font-title', font.family);
-    root.style.setProperty('--title-scale', String(font.scale));
 }

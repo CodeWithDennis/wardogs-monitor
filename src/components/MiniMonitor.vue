@@ -214,7 +214,7 @@ html.mini-window body {
 
 .map {
     font-family: var(--font-title);
-    font-size: calc(17.5px * var(--title-scale, 1));
+    font-size: 17.5px;
     line-height: 1.2;
 }
 

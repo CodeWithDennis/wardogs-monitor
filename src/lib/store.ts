@@ -77,7 +77,6 @@ export const state = reactive({
         railCollapsed: false,
         sidebarCollapsed: false,
         detailCollapsed: false,
-        titleFont: 'barlow-condensed',
         notifyServerDown: true,
         notifyWatched: true,
         watchlist: [],
