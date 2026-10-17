@@ -6,8 +6,9 @@ import brand from '../brand.json' with { type: 'json' };
 import { startMockServer } from '../mock/wardogs-mock.mjs';
 import { LIMITS } from './config.mjs';
 import { licence } from './license.mjs';
-import { act, bans, catalog, clearCache, identity, live, probe, readSettings, rotation } from './service.mjs';
-import { activity, preferences, servers, ZOOM_STEPS } from './store.mjs';
+import { dropServer, removeGroup, saveGroup } from './banlists.mjs';
+import { act, banListPlan, banListSync, bans, catalog, clearCache, identity, live, probe, readSettings, rotation } from './service.mjs';
+import { activity, banLists, preferences, servers, ZOOM_STEPS } from './store.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const devServer = process.env.VITE_DEV_SERVER_URL;
@@ -289,6 +290,17 @@ async function isLocked(serverId) {
     return Boolean(server && !server.demo && !(await licence.unlocked()));
 }
 
+/** A ban list as the window sees it: its servers and counts, not every ban. */
+const publicGroup = (group) => ({
+    id: group.id,
+    name: group.name,
+    serverIds: group.serverIds,
+    banCount: group.bans.length,
+    liftedCount: group.tombstones.length,
+    createdAt: group.createdAt,
+    lastSyncedAt: group.lastSyncedAt,
+});
+
 function registerIpc() {
     const handle = (channel, fn) => ipcMain.handle(channel, (_event, ...args) => fn(...args));
 
@@ -323,6 +335,7 @@ function registerIpc() {
     });
     handle('servers:remove', async (id) => {
         await servers.remove(String(id));
+        await banLists.update((groups) => ({ groups: dropServer(groups, String(id)) }));
         clearCache(String(id));
     });
     handle('servers:reorder', (ids) => servers.reorder(Array.isArray(ids) ? ids.map(String) : []));
@@ -340,6 +353,36 @@ function registerIpc() {
     gated('server:identity', (id) => identity(id).catch(() => ({ serverId: null, bannerUrl: null })), () => ({ serverId: null, bannerUrl: null }));
     gated('server:settings', (id) => readSettings(id), () => ({ error: LOCKED, revision: null, writable: false, settings: null, rotation: null }));
     gated('server:act', (id, name, args) => act(id, String(name), args ?? {}), () => ({ ok: false, error: LOCKED }));
+
+    // Linked ban lists. Planning only reads; a sync writes only the plan the
+    // user confirmed in the preview (its fingerprint must still match).
+    const groupId = (value) => (typeof value === 'string' && value.length > 0 && value.length <= 64 ? value : null);
+
+    handle('banlists:list', async () => (await banLists.list()).map(publicGroup));
+    handle('banlists:save', async (input) => {
+        const saved = await servers.list();
+        const clean = {
+            id: input?.id === undefined ? undefined : groupId(input.id) ?? '-',
+            name: input?.name === undefined ? undefined : String(input.name),
+            serverIds: input?.serverIds === undefined ? undefined : Array.isArray(input.serverIds) ? input.serverIds.slice(0, 200).map(String) : [],
+        };
+        const answer = await banLists.update((groups) => {
+            const result = saveGroup(groups, clean, saved);
+
+            return 'error' in result ? { result } : { groups: result.groups, result };
+        });
+
+        return 'error' in answer ? { ok: false, error: answer.error } : { ok: true, group: publicGroup(answer.group) };
+    });
+    handle('banlists:remove', async (id) => {
+        await banLists.update((groups) => ({ groups: removeGroup(groups, String(id)) }));
+    });
+    handle('banlists:plan', (id) => (groupId(id) ? banListPlan(id, isLocked) : { ok: false, error: 'That ban list no longer exists.' }));
+    handle('banlists:sync', (id, fingerprint) =>
+        groupId(id) && typeof fingerprint === 'string' && /^[0-9a-f]{16}$/.test(fingerprint)
+            ? banListSync(id, fingerprint, isLocked)
+            : { ok: false, error: 'Check the differences first, then confirm the sync.' },
+    );
 
     handle('license:status', () => licence.status());
     handle('license:activate', async (key) => {

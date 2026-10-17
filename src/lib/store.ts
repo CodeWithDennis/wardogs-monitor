@@ -142,18 +142,27 @@ export interface ConfirmRequest {
     body: string;
     confirmLabel: string;
     danger?: boolean;
+    /** A second way to go ahead, shown left of the main button (like "Only this server"). */
+    alternativeLabel?: string;
 }
 
-export const confirmation = ref<(ConfirmRequest & { resolve: (yes: boolean) => void }) | null>(null);
+type ConfirmAnswer = 'confirm' | 'alternative' | null;
 
-export function confirm(request: ConfirmRequest): Promise<boolean> {
+export const confirmation = ref<(ConfirmRequest & { resolve: (answer: ConfirmAnswer) => void }) | null>(null);
+
+/** Ask, with two ways to go ahead: 'confirm', 'alternative', or null when cancelled. */
+export function choose(request: ConfirmRequest): Promise<ConfirmAnswer> {
     return new Promise((resolve) => {
         confirmation.value = { ...request, resolve };
     });
 }
 
-export function answerConfirm(yes: boolean): void {
-    confirmation.value?.resolve(yes);
+export async function confirm(request: ConfirmRequest): Promise<boolean> {
+    return (await choose(request)) === 'confirm';
+}
+
+export function answerConfirm(answer: boolean | 'alternative'): void {
+    confirmation.value?.resolve(answer === 'alternative' ? 'alternative' : answer ? 'confirm' : null);
     confirmation.value = null;
 }
 
