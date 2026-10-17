@@ -8,12 +8,13 @@ import { formatUptime, modeName, percent } from '@/lib/format';
 import { BILLING_URL, openBilling } from '@/lib/licence';
 import { mapName } from '@/lib/maps';
 import { removeServer, selectServer, state } from '@/lib/store';
+import { pickWidgets } from '@/lib/widgets';
 import type { SavedServer } from '@/types';
 
 /**
  * One server as a card: its map pictured, status, players, the score race
  * and where it is. Clicking opens its controls; the ⋯ menu (or a right
- * click) edits, removes it or opens the mini monitor.
+ * click) edits, removes it or opens its widgets.
  */
 const props = defineProps<{ server: SavedServer }>();
 
@@ -38,11 +39,9 @@ function remove(): void {
     removeServer(props.server);
 }
 
-async function mini(): Promise<void> {
+function widgets(): void {
     menu.value = false;
-    selectServer(props.server.id, false);
-    await window.panel.mini.open(props.server.id);
-    state.miniOpen = true;
+    pickWidgets(props.server.id);
 }
 
 function onDocument(event: MouseEvent): void {
@@ -77,7 +76,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onDocument));
                 <Transition name="pop">
                     <div v-if="menu" class="menu" role="menu">
                         <button type="button" role="menuitem" @click="open"><ArrowRight /> Open controls</button>
-                        <button type="button" role="menuitem" @click="mini"><PictureInPicture2 /> Mini monitor</button>
+                        <button type="button" role="menuitem" @click="widgets"><PictureInPicture2 /> Widgets…</button>
                         <button type="button" role="menuitem" @click="edit"><Pencil /> Edit server</button>
                         <div class="divider" />
                         <button type="button" role="menuitem" class="bad" @click="remove"><Trash2 /> Remove server</button>

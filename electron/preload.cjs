@@ -54,12 +54,11 @@ contextBridge.exposeInMainWorld('panel', {
     setZoom: invoke('zoom:set'),
     limits: invoke('limits'),
     appInfo: invoke('app:info'),
-    mini: {
-        open: invoke('mini:open'),
-        close: invoke('mini:close'),
-        onServer: listen('mini:server'),
-        onOpened: listen('mini:opened'),
-        onClosed: listen('mini:closed'),
+    widgets: {
+        open: invoke('widgets:open'),
+        close: invoke('widgets:close'),
+        list: invoke('widgets:list'),
+        onChange: listen('widgets:changed'),
     },
     focusMain: invoke('main:focus'),
     openExternal: invoke('external:open'),

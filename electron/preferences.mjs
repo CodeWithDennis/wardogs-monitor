@@ -1,3 +1,5 @@
+import { cleanWidgets } from './widgets.mjs';
+
 /**
  * The app's preferences: their defaults, and how what is stored becomes
  * what the app uses. Only what someone set is stored, so a default that
@@ -29,7 +31,6 @@ export const DEFAULT_PREFERENCES = {
     zoom: 1,
     miniZoom: 1,
     railCollapsed: false,
-    sidebarCollapsed: false,
     notifyServerDown: true,
     notifyWatched: true,
     /** Players to keep an eye on: { steamId, name, note, addedAt }. */
@@ -43,6 +44,8 @@ export const DEFAULT_PREFERENCES = {
     startMinimized: false,
     /** Start with Windows, hidden in the tray. */
     launchAtLogin: false,
+    /** The open widgets and where they sit, so they reopen on the next start (see widgets.mjs). */
+    widgets: [],
     /** Whether the one-off "still running in the tray" notice was shown. */
     trayNoticeShown: false,
     /**
@@ -112,6 +115,7 @@ export function resolve(raw) {
     }
 
     next.bootColors = cleanBootColors(next.bootColors);
+    next.widgets = cleanWidgets(next.widgets);
 
     return next;
 }

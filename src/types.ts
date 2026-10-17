@@ -219,7 +219,6 @@ export interface Preferences {
     zoom: number;
     miniZoom: number;
     railCollapsed: boolean;
-    sidebarCollapsed: boolean;
     notifyServerDown: boolean;
     notifyWatched: boolean;
     watchlist: WatchedPlayer[];
@@ -232,6 +231,28 @@ export interface Preferences {
     startMinimized: boolean;
     /** Start with Windows, hidden in the tray. */
     launchAtLogin: boolean;
+    /** The open widgets and where they sit (main keeps this list). */
+    widgets: (OpenWidget & { bounds: { x: number; y: number; width: number; height: number } | null })[];
+}
+
+/** What a widget shows (electron/widgets.mjs). */
+export type WidgetKind = 'status' | 'score' | 'players' | 'actions';
+
+/** An open widget window: one kind, on one server. */
+export interface OpenWidget {
+    id: string;
+    kind: WidgetKind;
+    serverId: string;
+}
+
+/** What every widget gets from its window: the server online, with its latest reading. */
+export interface WidgetProps {
+    serverId: string;
+    live: Live;
+    status: LiveStatus;
+    /** What the rotation plays next, for the status widget. */
+    next: string | null;
+    preferences: Preferences;
 }
 
 /** The open theme's colours, which the next start paints its first frame in. */
@@ -326,13 +347,13 @@ export interface PanelApi {
     setZoom(factor: number): Promise<void>;
     limits(): Promise<Limits>;
     appInfo(): Promise<{ version: string; dataPath: string }>;
-    mini: {
-        open(serverId: string): Promise<void>;
-        close(): Promise<void>;
-        onServer(callback: (serverId: string) => void): () => void;
-        /** The mini monitor opened, maybe from the tray menu. */
-        onOpened(callback: () => void): () => void;
-        onClosed(callback: () => void): () => void;
+    widgets: {
+        open(kind: WidgetKind, serverId: string): Promise<void>;
+        /** Close a widget by ID; from inside a widget, without one, that widget. */
+        close(id?: string): Promise<void>;
+        list(): Promise<OpenWidget[]>;
+        /** The open widgets changed, maybe from the tray menu or a widget's own close button. */
+        onChange(callback: (widgets: OpenWidget[]) => void): () => void;
     };
     /** Show the main window, from the tray or minimised if need be. */
     focusMain(): Promise<void>;

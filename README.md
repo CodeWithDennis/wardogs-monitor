@@ -43,11 +43,11 @@
 - **Alerts**: a notification when a server goes down or comes back.
 - **Linked ban lists**: link servers into one shared ban list (Options → Ban lists). On start, or with Sync, the app shows what differs per server and adds the missing bans only after you confirm; unbans made in the app apply to every linked server.
 - **Licence**: one plan, €9.99 a month or €99 a year, with unlimited servers on up to 3 PCs. The key carries the limits, so the app enforces them offline too. The 14-day trial is unlimited.
-- **Tray**: the app lives in the notification area by the clock. Closing the window hides it there and alerts keep coming; the tray icon shows how many servers are online and how many players, and its menu opens a server, the mini monitor or quits. It can also minimise to the tray, start hidden, or start with Windows (Options → General → Background).
-- **Mini monitor**: a small always-on-top window with the map, score race and player count, to keep over the game.
+- **Tray**: the app lives in the notification area by the clock. Closing the window hides it there and alerts keep coming; the tray icon shows how many servers are online and how many players, and its menu opens a server, a widget or quits. It can also minimise to the tray, start hidden, or start with Windows (Options → General → Background).
+- **Widgets**: small always-on-top windows to keep over the game, as many as you like at once: **Status** (map, score race, player count), **Score** (the faction race, big), **Top players** (leaderboard by kills) and **Quick actions** (saved and typed broadcasts, restart or end the match, each asking for a second click while confirm actions is on). Pick them from the sidebar, a server card or the detail panel; they reopen where you left them on the next start.
 - **Activity log**: every action taken from the app, per server, with failures.
 - **Themes**: 24 themes (Midnight by default, plus Carbon, Graphite, Blackout, Nord, Dracula, Gruvbox, Tokyo Night and more) and four accent colours. Zoom with Ctrl + / Ctrl − / Ctrl 0 or Ctrl + mouse wheel.
-- **Layout**: the sidebar folds to icons (Ctrl+B) and the rail switches to icons only; the right-hand details always stay in view. The window keeps a minimum size (1100×640 at 100% zoom, more when zoomed in) so everything fits; below 1180 wide the sidebar folds on its own and comes back when the window widens. Pages adapt to the space they get. Click a players column header to sort by it.
+- **Layout**: the sidebar and the right-hand details always stay in view; the rail can switch to icons only. The window keeps a minimum size (1360×640 at 100% zoom, more when zoomed in) so everything fits. Pages adapt to the space they get. Click a players column header to sort by it.
 - **Demo server**: a pretend server that plays a match on its own, so every control can be tried safely.
 
 ## Screenshots
@@ -60,9 +60,9 @@
 | **Themes** | **Trial ended, servers locked** |
 | ![Themes](docs/screenshots/themes.png) | ![Licence](docs/screenshots/licence.png) |
 
-The mini monitor, and the window with the sidebar hidden and the rail on icons only:
+Widgets, and the window with the rail on icons only:
 
-![Mini monitor](docs/screenshots/mini-monitor.png)
+![Widgets](docs/screenshots/widgets.png)
 
 ![Collapsed](docs/screenshots/collapsed.png)
 
@@ -91,7 +91,6 @@ The app checks that the server answers with that password before saving it.
 | --- | --- |
 | Ctrl+K | Search everything |
 | Ctrl+H | All servers as cards |
-| Ctrl+B | Fold the sidebar to icons (the rail's « button does the same for the rail) |
 | Ctrl+1 … Ctrl+6 | Overview, Players, Match, Rotation, Bans, Settings |
 | Ctrl+F | Jump to the page's search box |
 | F5 or Ctrl+R | Read the server again now |
@@ -201,7 +200,7 @@ scripts/
   screenshots.mjs, capture.mjs   screenshot mode
   make-icon.mjs             renders build/icon.png and the tray icons in build/tray/
 src/
-  App.vue, main.ts          the window (main panel or mini monitor)
+  App.vue, main.ts          the window (main panel or a widget)
   components/               shell, rail, sidebar, switcher, cards, dialogs, palette…
   views/                    Servers, Overview, Players, Match, Rotation, Bans, Settings, Activity, Options
   lib/                      store, themes, brand, formatting, maps, watchlist

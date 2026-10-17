@@ -1,5 +1,5 @@
 import { computed, markRaw, reactive, ref, watch } from 'vue';
-import type { ActionResult, LicenceStatus, Limits, Live, Player, Preferences, SavedServer } from '@/types';
+import type { ActionResult, LicenceStatus, Limits, Live, OpenWidget, Player, Preferences, SavedServer } from '@/types';
 
 /** A player who was on a server and is gone now, kept so they can still be banned or watched. */
 export interface LeftPlayer {
@@ -75,7 +75,6 @@ export const state = reactive({
         zoom: 1,
         miniZoom: 1,
         railCollapsed: false,
-        sidebarCollapsed: false,
         notifyServerDown: true,
         notifyWatched: true,
         watchlist: [],
@@ -84,6 +83,7 @@ export const state = reactive({
         minimizeToTray: false,
         startMinimized: false,
         launchAtLogin: false,
+        widgets: [],
     } as Preferences,
     limits: null as Limits | null,
     version: '0.1.0',
@@ -92,7 +92,10 @@ export const state = reactive({
     search: '',
     addingServer: false,
     editingServer: null as SavedServer | null,
-    miniOpen: false,
+    /** The open widget windows. */
+    widgets: [] as OpenWidget[],
+    /** The server the widget picker is open for, or null when closed. */
+    widgetPicker: null as string | null,
     /** Players who left each server since the app opened, newest first. */
     left: {} as Record<string, LeftPlayer[]>,
     /** The tab Options opens on. */
@@ -375,61 +378,8 @@ export function selectServer(serverId: string, open = true): void {
     }
 }
 
-/**
- * Below this window width (in CSS pixels, so zoom counts), the sidebar
- * folds to icons on its own, so the page keeps room to breathe. The saved
- * choice is left alone: widen the window and it comes back as it was.
- */
-export const SIDEBAR_FOLDS_BELOW = 1180;
-
-/** The window's width, and whether the sidebar was opened by hand while the window is narrow. */
-export const layout = reactive({
-    width: typeof window === 'undefined' ? 1920 : window.innerWidth,
-    unfolded: false,
-});
-
-const narrow = () => layout.width < SIDEBAR_FOLDS_BELOW;
-
-/** Whether the sidebar shows as icons: chosen by the person, or a narrow window. */
-export const sidebarFolded = computed(() => state.preferences.sidebarCollapsed || (narrow() && !layout.unfolded));
-
-if (typeof window !== 'undefined') {
-    let frame = 0;
-
-    window.addEventListener('resize', () => {
-        cancelAnimationFrame(frame);
-        frame = requestAnimationFrame(() => {
-            const wasNarrow = narrow();
-            layout.width = window.innerWidth;
-
-            // Crossing the threshold forgets a sidebar opened by hand, so the automatic fold applies again.
-            if (wasNarrow !== narrow()) {
-                layout.unfolded = false;
-            }
-        });
-    });
-}
-
-/**
- * Show or hide the sidebar (Ctrl+B) or the rail's labels; remembered. While
- * the window is too narrow, opening the folded sidebar opens it for now and
- * folding it again closes it, without changing the saved choice.
- */
-export async function togglePanel(which: 'railCollapsed' | 'sidebarCollapsed'): Promise<void> {
-    if (which === 'sidebarCollapsed' && narrow()) {
-        if (!sidebarFolded.value) {
-            layout.unfolded = false;
-
-            return;
-        }
-
-        layout.unfolded = true;
-
-        if (!state.preferences.sidebarCollapsed) {
-            return;
-        }
-    }
-
+/** Show or hide the rail's labels; remembered. */
+export async function togglePanel(which: 'railCollapsed'): Promise<void> {
     state.preferences = { ...state.preferences, [which]: !state.preferences[which] };
     state.preferences = await window.panel.preferences.set({ [which]: state.preferences[which] });
 }
@@ -507,7 +457,8 @@ export async function init(): Promise<void> {
         state.preferences = next;
         schedulePoll();
     });
-    window.panel.mini.onClosed(() => (state.miniOpen = false));
+    state.widgets = await window.panel.widgets.list();
+    window.panel.widgets.onChange((widgets) => (state.widgets = widgets));
 
     for (const server of state.servers) {
         refreshLive(server.id).catch(() => undefined);
@@ -591,13 +542,6 @@ export async function act(name: string, args: Record<string, unknown> = {}, opti
         if (removing && !succeeded) {
             leaving.delete(removing);
         }
-    }
-}
-
-export async function openMini(): Promise<void> {
-    if (state.selectedId) {
-        await window.panel.mini.open(state.selectedId);
-        state.miniOpen = true;
     }
 }
 

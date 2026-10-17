@@ -8,7 +8,8 @@ import { mapName } from '@/lib/maps';
 import { killPlayer, openPlayerAction } from '@/lib/playerActions';
 import { liftBan } from '@/lib/banlists';
 import { isWatched, setWatchNote, toggleWatch, watchedEntry } from '@/lib/watchlist';
-import { openMini, openView, refreshLive, selectedLive, selectedServer, state, toast } from '@/lib/store';
+import { pickWidgets } from '@/lib/widgets';
+import { openView, refreshLive, selectedLive, selectedServer, state, toast } from '@/lib/store';
 import type { Ban } from '@/types';
 
 /**
@@ -174,7 +175,7 @@ function unban(entry: Ban): void {
                 <div class="hero">
                     <MapArt :map="status?.map" :lighting="status?.lighting" class="art" />
                     <div class="hero-buttons drag">
-                        <button type="button" class="icon-btn" title="Mini monitor" @click="openMini"><PictureInPicture2 /></button>
+                        <button type="button" class="icon-btn" title="Widgets" @click="pickWidgets()"><PictureInPicture2 /></button>
                         <button type="button" class="icon-btn" :class="{ spinning: state.loading[state.selectedId ?? ''] }" title="Refresh (F5)" @click="state.selectedId && refreshLive(state.selectedId, true)"><RefreshCw /></button>
                     </div>
                     <h2 class="title hero-title">{{ status ? mapName(status.map) : selectedServer?.name }}</h2>
