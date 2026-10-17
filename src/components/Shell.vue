@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted } from 'vue';
 import BanListBanner from '@/components/BanListBanner.vue';
 import BanSyncDialog from '@/components/BanSyncDialog.vue';
+import BroadcastDialog from '@/components/BroadcastDialog.vue';
 import CommandPalette from '@/components/CommandPalette.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import DetailPanel from '@/components/DetailPanel.vue';
@@ -106,6 +107,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
         <PlayerContextMenu />
         <CommandPalette />
         <BanSyncDialog />
+        <BroadcastDialog />
         <WidgetsDialog />
         <ConfirmDialog />
         <Toasts />

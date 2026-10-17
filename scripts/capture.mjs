@@ -239,6 +239,16 @@ export async function captureViews({ app, mainWindow, openWidget, getWidget, dir
     await wait(700);
     await shot('14-widget-picker');
     await run(`document.querySelector('.modal .close')?.click()`);
+    await wait(400);
+
+    // The broadcast dialog from the detail panel, with a saved message picked (cancelled, never sent).
+    await click('.detail .cta');
+    await wait(600);
+    await click('.modal .template');
+    await wait(300);
+    await shot('15-broadcast-dialog');
+    await run(`document.querySelector('.modal .close')?.click()`);
+    await wait(400);
 
     for (const kind of ['status', 'score', 'players', 'actions']) {
         await openWidget(kind, serverId);
