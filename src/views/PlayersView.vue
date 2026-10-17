@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Ban, MessageSquare, Star, UserMinus, UserX, Users } from 'lucide-vue-next';
+import { ArrowDown, ArrowUp, Ban, MessageSquare, Star, UserMinus, UserX, Users } from 'lucide-vue-next';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import SearchField from '@/components/SearchField.vue';
 import ViewHeader from '@/components/ViewHeader.vue';
@@ -7,15 +7,50 @@ import { ago, number, pingLevel, ratio } from '@/lib/format';
 import { openPlayerAction, openPlayerMenu } from '@/lib/playerActions';
 import { now, selectedLive, state } from '@/lib/store';
 import { isWatched, toggleWatch, watchedEntry } from '@/lib/watchlist';
+import type { Player } from '@/types';
 
 /**
  * Everyone on the server, filtered by faction, the watchlist and the
- * sidebar search, sorted by name, score or ping. Clicking a player opens
+ * page's search, sorted by clicking a column header. Clicking a player opens
  * them on the right; right-click for every action; arrow keys move. The
  * Left tab keeps players who just quit, so they can still be banned.
  */
 const faction = computed({ get: () => state.playersTab, set: (value: string) => (state.playersTab = value) });
-const sort = ref<'name' | 'kills' | 'ping'>('name');
+type SortKey = 'name' | 'kills' | 'deaths' | 'kd' | 'cash' | 'ping';
+
+/** The sortable columns, and which way each sorts first: names A to Z, numbers highest first. */
+const COLUMNS: { key: SortKey; label: string; title: string; className: string; firstDir: 'asc' | 'desc' }[] = [
+    { key: 'name', label: 'Player', title: 'Sort by name', className: 'c-name', firstDir: 'asc' },
+    { key: 'kills', label: 'K', title: 'Sort by kills', className: 'c-num', firstDir: 'desc' },
+    { key: 'deaths', label: 'D', title: 'Sort by deaths', className: 'c-num', firstDir: 'desc' },
+    { key: 'kd', label: 'K/D', title: 'Sort by kills per death', className: 'c-num', firstDir: 'desc' },
+    { key: 'cash', label: 'Cash', title: 'Sort by cash', className: 'c-cash', firstDir: 'desc' },
+    { key: 'ping', label: 'Ping', title: 'Sort by ping', className: 'c-ping', firstDir: 'desc' },
+];
+
+function sortBy(key: SortKey): void {
+    const column = COLUMNS.find((entry) => entry.key === key)!;
+    state.playersSort = state.playersSort.key === key ? { key, dir: state.playersSort.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: column.firstDir };
+}
+
+const sortValue: Record<SortKey, (player: Player) => number | string> = {
+    name: (player) => player.name.toLowerCase(),
+    kills: (player) => player.kills,
+    deaths: (player) => player.deaths,
+    kd: (player) => (player.deaths === 0 ? player.kills : player.kills / player.deaths),
+    cash: (player) => player.cash,
+    ping: (player) => player.pingMs,
+};
+
+function compare(a: Player, b: Player): number {
+    const { key, dir } = state.playersSort;
+    const left = sortValue[key](a);
+    const right = sortValue[key](b);
+    const order = typeof left === 'string' ? left.localeCompare(right as string) : left - (right as number);
+
+    // Ties fall back to the name, so the order never jumps around between readings.
+    return (dir === 'asc' ? order : -order) || a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+}
 
 const live = selectedLive;
 const factions = computed(() => live.value?.status?.factions ?? []);
@@ -41,7 +76,7 @@ const players = computed(() => {
     return (live.value?.players ?? [])
         .filter((player) => faction.value === 'all' || (faction.value === 'watched' ? isWatched(player.steamId) : player.faction === faction.value))
         .filter((player) => term === '' || player.name.toLowerCase().includes(term) || player.steamId.includes(term))
-        .sort((a, b) => (sort.value === 'kills' ? b.kills - a.kills || a.deaths - b.deaths : sort.value === 'ping' ? b.pingMs - a.pingMs : 0));
+        .sort(compare);
 });
 
 function select(steamId: string): void {
@@ -77,14 +112,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
 
     <div class="toolbar">
         <SearchField placeholder="Search players by name or Steam ID" :count="faction === 'left' ? leftShown.length : players.length" />
-        <div v-if="faction !== 'left'" class="sort">
-            <span class="sort-label">Sort</span>
-            <div class="segmented" role="group" aria-label="Sort">
-                <button type="button" :class="{ on: sort === 'name' }" @click="sort = 'name'">Name</button>
-                <button type="button" :class="{ on: sort === 'kills' }" @click="sort = 'kills'">Score</button>
-                <button type="button" :class="{ on: sort === 'ping' }" @click="sort = 'ping'">Ping</button>
-            </div>
-        </div>
     </div>
 
     <div class="view-body flush" @contextmenu.self.prevent>
@@ -119,13 +146,20 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
         </template>
 
         <template v-else>
-        <div class="head">
-            <span class="c-name">Player</span>
-            <span class="c-num">K</span>
-            <span class="c-num">D</span>
-            <span class="c-num">K/D</span>
-            <span class="c-cash">Cash</span>
-            <span class="c-ping">Ping</span>
+        <div class="head" role="row">
+            <button
+                v-for="column in COLUMNS"
+                :key="column.key"
+                type="button"
+                class="sortable"
+                :class="[column.className, { sorted: state.playersSort.key === column.key }]"
+                :title="column.title"
+                :aria-sort="state.playersSort.key === column.key ? (state.playersSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'"
+                @click="sortBy(column.key)"
+            >
+                <span>{{ column.label }}</span>
+                <component :is="state.playersSort.key === column.key && state.playersSort.dir === 'asc' ? ArrowUp : ArrowDown" class="arrow" />
+            </button>
             <span class="c-tools" />
         </div>
 
@@ -207,19 +241,48 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
     fill: var(--warn);
 }
 
-.sort {
+.sortable {
     display: flex;
     align-items: center;
-    gap: 11px;
+    gap: 4px;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
 }
 
-.sort-label {
-    color: var(--faint);
-    font-family: var(--font-title);
-    font-size: 11.5px;
-    font-weight: 600;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+.sortable.c-num,
+.sortable.c-cash,
+.sortable.c-ping {
+    justify-content: flex-end;
+}
+
+.sortable:hover {
+    color: var(--text-2);
+}
+
+.sortable.sorted {
+    color: var(--accent);
+}
+
+.arrow {
+    width: 13px;
+    height: 13px;
+    flex: none;
+    opacity: 0;
+    transition: opacity 0.12s;
+}
+
+.sortable:hover .arrow {
+    opacity: 0.5;
+}
+
+.sortable.sorted .arrow {
+    opacity: 1;
 }
 
 .head,
