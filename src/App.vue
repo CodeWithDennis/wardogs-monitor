@@ -15,8 +15,8 @@ onMounted(async () => {
 
     // Both windows follow the chosen theme and headline font, live.
     const preferences = await window.panel.preferences.get();
-    applyTheme(preferences.theme, preferences.accent, preferences.titleFont);
-    window.panel.preferences.onChange((next) => applyTheme(next.theme, next.accent, next.titleFont));
+    applyTheme(preferences.theme, preferences.accent);
+    window.panel.preferences.onChange((next) => applyTheme(next.theme, next.accent));
 });
 </script>
 

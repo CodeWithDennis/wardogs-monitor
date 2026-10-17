@@ -1,25 +1,13 @@
 @import '@fontsource/inter/400.css';
 @import '@fontsource/inter/500.css';
 @import '@fontsource/inter/600.css';
-@import '@fontsource/barlow-condensed/500.css';
-@import '@fontsource/barlow-condensed/600.css';
-@import '@fontsource/barlow-condensed/700.css';
-@import '@fontsource/barlow-condensed/800.css';
-@import '@fontsource/teko/500.css';
-@import '@fontsource/teko/600.css';
-@import '@fontsource/teko/700.css';
-@import '@fontsource/saira-stencil-one/400.css';
-@import '@fontsource/russo-one/400.css';
-@import '@fontsource/black-ops-one/400.css';
 
 /*
- * Inter for body text and every control (buttons, tabs, labels), and a
- * headline font for real headings and big numbers only, which people pick
- * under Options > Appearance (FONTS in src/lib/themes.ts sets --font-title).
- * Small controls stay in Inter because a condensed face looks cramped there. Barlow Condensed is the default, the website's stand-in for
- * its DIN Condensed brand face. Oxanium is self-hosted below instead of from
- * Fontsource because it carries the site's metric overrides, so uppercase
- * labels sit centred next to their icons.
+ * Inter for body text and every control (buttons, tabs, labels), and
+ * Oxanium for real headings and big numbers only: heavy, blocky letters
+ * with chamfered corners. Oxanium is self-hosted below instead of from
+ * Fontsource because it carries metric overrides, so uppercase headings sit
+ * centred next to their icons.
  */
 @font-face {
     font-family: 'Oxanium';
@@ -125,20 +113,10 @@
     --caption-w: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, calc(100vw - 140px)) + 10px);
     --caption-h: env(titlebar-area-height, 34px);
 
-    --font-title: 'Barlow Condensed', Impact, sans-serif;
-    /* How much bigger the wordmark is set, as condensed fonts read smaller. */
-    --title-scale: 1.12;
+    --font-title: 'Oxanium', 'Segoe UI', sans-serif;
     --font-body: 'Inter', 'Segoe UI', system-ui, sans-serif;
 
     color-scheme: dark;
-}
-
-/*
- * Saira Stencil One, Russo One and Black Ops One come in one weight, so stop
- * the browser smearing a fake bold over them wherever a headline asks for 600+.
- */
-:root:is([data-font='saira-stencil'], [data-font='russo-one'], [data-font='black-ops-one']) {
-    font-synthesis-weight: none;
 }
 
 * {

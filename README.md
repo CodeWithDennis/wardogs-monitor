@@ -46,7 +46,6 @@
 - **Mini monitor**: a small always-on-top window with the map, score race and player count, to keep over the game.
 - **Activity log**: every action taken from the app, per server, with failures.
 - **Themes**: 24 themes (Midnight by default, plus Carbon, Graphite, Blackout, Nord, Dracula, Gruvbox, Tokyo Night and more) and four accent colours. Zoom with Ctrl + / Ctrl − / Ctrl 0 or Ctrl + mouse wheel.
-- **Fonts**: six headline fonts (Barlow Condensed by default, plus Oxanium, Saira Stencil, Russo One, Teko and Black Ops One).
 - **Layout**: the sidebar folds to icons (Ctrl+B), the rail switches to icons only, and the right-hand details fold to a thin strip (Ctrl+J). Click a players column header to sort by it.
 - **Demo server**: a pretend server that plays a match on its own, so every control can be tried safely.
 

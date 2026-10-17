@@ -249,7 +249,7 @@ function playersOnline(serverId: string): string {
 .wordmark {
     margin: 0;
     font-family: var(--font-title);
-    font-size: calc(22px * var(--title-scale, 1));
+    font-size: 22px;
     font-weight: 800;
     letter-spacing: 0.09em;
     line-height: 1;
