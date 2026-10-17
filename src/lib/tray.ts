@@ -30,7 +30,6 @@ export function startTray(): void {
         }
     });
     window.panel.tray.onOpenLicence(() => openOptions('licence'));
-    window.panel.mini.onOpened(() => (state.miniOpen = true));
 }
 
 function summary(): { selectedId: string | null; servers: TrayServer[] } {

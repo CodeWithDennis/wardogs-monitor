@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, Notification, screen, shell, Tray } from 'electron';
+import { randomUUID } from 'node:crypto';
 import { cpSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +14,7 @@ import { act, banListPlan, banListSync, bans, catalog, clearCache, identity, liv
 import { cleanBootColors } from './preferences.mjs';
 import { activity, banLists, preferences, servers, ZOOM_STEPS } from './store.mjs';
 import { cleanSummary, serverLabel, statusLine, tooltip } from './tray-status.mjs';
+import { isWidgetKind, MAX_WIDGETS, onScreen, placeWidget, WIDGET_KINDS } from './widgets.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const devServer = process.env.VITE_DEV_SERVER_URL;
@@ -68,8 +70,8 @@ if (process.env.PANEL_SCREENSHOTS) {
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
-/** @type {BrowserWindow | null} */
-let miniWindow = null;
+/** The open widget windows, by widget ID (see openWidget). @type {Map<string, BrowserWindow>} */
+const widgetWindows = new Map();
 /** @type {{ port: number, close: () => Promise<void> } | null} */
 let demo = null;
 /** Saved servers are listed only once the demo server (if any) is up and its port saved. */
@@ -101,11 +103,24 @@ let lastBlurAt = 0;
 /** Started hidden while maximised: maximise on first show (maximising a hidden window shows it). */
 let maximizeOnShow = false;
 
-/** Save preference changes and keep the copy above current. */
-async function savePreferences(changes) {
-    prefs = await preferences.set(changes);
+let preferenceQueue = Promise.resolve();
 
-    return prefs;
+/**
+ * Save preference changes and keep the copy above current. Saves run one
+ * after another; `changes` may be a function of the latest preferences,
+ * for changes built from what is saved (like the list of widgets).
+ *
+ * @param {Record<string, any> | ((current: Record<string, any>) => Record<string, any>)} changes
+ */
+function savePreferences(changes) {
+    const run = preferenceQueue.then(async () => {
+        prefs = await preferences.set(typeof changes === 'function' ? changes(prefs) : changes);
+
+        return prefs;
+    });
+    preferenceQueue = run.catch(() => undefined);
+
+    return run;
 }
 
 /**
@@ -204,12 +219,12 @@ function attachZoom(window, key, onZoom = () => {}) {
 const zoomers = {};
 
 /**
- * The smallest main window, in page pixels: the rail, the folded sidebar, a
+ * The smallest main window, in page pixels: the rail, the full sidebar, a
  * page and the detail panel side by side, with nothing squeezed. Zooming in
  * makes page pixels bigger, so the window's minimum grows with the zoom
  * (never past the screen it is on).
  */
-const MAIN_MINIMUM = { width: 1100, height: 640 };
+const MAIN_MINIMUM = { width: 1360, height: 640 };
 
 function fitMinimumSize(window, factor) {
     const area = screen.getDisplayMatching(window.getBounds()).workArea;
@@ -318,7 +333,7 @@ function createMainWindow({ hidden }) {
 
     mainWindow.on('closed', () => {
         mainWindow = null;
-        miniWindow?.close();
+        widgetWindows.forEach((window) => window.close());
     });
 }
 
@@ -428,11 +443,15 @@ function createTray() {
 /** Built on every right-click, so it always shows the latest readings. */
 function trayMenu() {
     const list = traySummary?.servers ?? [];
-    const miniTarget = [traySummary?.selectedId, prefs.lastServerId, list[0]?.id].find((id) => id && list.some((server) => server.id === id));
+    const widgetTarget = [traySummary?.selectedId, prefs.lastServerId, list[0]?.id].find((id) => id && list.some((server) => server.id === id));
 
     return Menu.buildFromTemplate([
         { label: `Open ${brand.name}`, click: showMain },
-        { label: 'Mini monitor', enabled: Boolean(miniTarget), click: () => miniTarget && openMini(miniTarget) },
+        {
+            label: 'Widgets',
+            enabled: Boolean(widgetTarget),
+            submenu: Object.entries(WIDGET_KINDS).map(([kind, spec]) => ({ label: spec.title, click: () => widgetTarget && openWidget(kind, widgetTarget) })),
+        },
         { type: 'separator' },
         { label: statusLine(traySummary), enabled: false },
         ...list.map((server) => ({ label: serverLabel(server), icon: dots[server.state], click: () => openServer(server.id) })),
@@ -518,52 +537,109 @@ async function askToQuitDuringSync() {
     }
 }
 
-async function openMini(serverId) {
-    // The tray menu opens it too, so the window learns it is open from here.
-    mainWindow?.webContents.send('mini:opened');
+/** The open widgets, for the main window. */
+const openWidgets = () => (prefs.widgets ?? []).filter((widget) => widgetWindows.has(widget.id)).map(({ id, kind, serverId }) => ({ id, kind, serverId }));
 
-    if (miniWindow) {
-        miniWindow.webContents.send('mini:server', serverId);
-        miniWindow.show();
-        miniWindow.focus();
+const announceWidgets = () => mainWindow?.webContents.send('widgets:changed', openWidgets());
+
+/**
+ * Open a widget on a server, or bring it forward when that one is open
+ * already. `saved` reopens one from the last run, where it sat.
+ *
+ * @param {string} kind
+ * @param {string} serverId
+ * @param {import('./widgets.mjs').SavedWidget} [saved]
+ */
+async function openWidget(kind, serverId, saved) {
+    if (!isWidgetKind(kind)) {
+        return;
+    }
+
+    const existing = (prefs.widgets ?? []).find((widget) => widget.kind === kind && widget.serverId === serverId && widgetWindows.has(widget.id));
+
+    if (existing) {
+        const window = widgetWindows.get(existing.id);
+        window?.show();
+        window?.focus();
 
         return;
     }
 
-    const area = screen.getPrimaryDisplay().workArea;
-    const bounds = prefs.miniBounds ?? { width: 420, height: 330, x: area.x + area.width - 440, y: area.y + 80 };
+    if (widgetWindows.size >= MAX_WIDGETS) {
+        return;
+    }
 
-    miniWindow = new BrowserWindow({
+    const spec = WIDGET_KINDS[kind];
+    const areas = screen.getAllDisplays().map((display) => display.workArea);
+    const bounds = saved?.bounds && onScreen(saved.bounds, areas) ? saved.bounds : placeWidget(kind, screen.getPrimaryDisplay().workArea, widgetWindows.size);
+    const id = saved?.id ?? randomUUID();
+
+    const window = new BrowserWindow({
         ...bounds,
-        minWidth: 350,
-        minHeight: 220,
+        minWidth: spec.min.width,
+        minHeight: spec.min.height,
         frame: false,
         transparent: true,
         resizable: true,
         skipTaskbar: false,
         alwaysOnTop: prefs.miniAlwaysOnTop,
-        title: `${brand.name}: mini monitor`,
+        title: `${brand.name}: ${spec.title}`,
         backgroundColor: '#00000000',
         webPreferences,
     });
 
-    miniWindow.setOpacity(prefs.miniOpacity);
+    widgetWindows.set(id, window);
+    window.setOpacity(prefs.miniOpacity);
 
     if (prefs.miniAlwaysOnTop) {
-        miniWindow.setAlwaysOnTop(true, 'screen-saver');
+        window.setAlwaysOnTop(true, 'screen-saver');
     }
 
-    lockDown(miniWindow);
-    zoomers.miniZoom = attachZoom(miniWindow, 'miniZoom');
-    load(miniWindow, `mini/${serverId}`);
+    lockDown(window);
+    attachZoom(window, 'miniZoom');
+    load(window, `widget/${kind}/${serverId}`);
 
-    const remember = () => miniWindow && savePreferences({ miniBounds: miniWindow.getBounds() });
-    miniWindow.on('resized', remember);
-    miniWindow.on('moved', remember);
-    miniWindow.on('closed', () => {
-        miniWindow = null;
-        mainWindow?.webContents.send('mini:closed');
+    await savePreferences((current) => ({ widgets: [...current.widgets.filter((widget) => widget.id !== id), { id, kind, serverId, bounds: window.getBounds() }] }));
+
+    const remember = () => {
+        if (!window.isDestroyed()) {
+            const next = window.getBounds();
+            savePreferences((current) => ({ widgets: current.widgets.map((widget) => (widget.id === id ? { ...widget, bounds: next } : widget)) }));
+        }
+    };
+
+    window.on('resized', remember);
+    window.on('moved', remember);
+    window.on('closed', () => {
+        widgetWindows.delete(id);
+
+        // Quitting closes every window: the widgets stay saved, to reopen on the next start.
+        if (!isQuitting && mainWindow) {
+            savePreferences((current) => ({ widgets: current.widgets.filter((widget) => widget.id !== id) })).then(announceWidgets);
+        }
     });
+
+    announceWidgets();
+}
+
+/** Close the widgets on a server, when it is removed. */
+function closeWidgetsFor(serverId) {
+    for (const widget of prefs.widgets ?? []) {
+        if (widget.serverId === serverId) {
+            widgetWindows.get(widget.id)?.close();
+        }
+    }
+}
+
+/** Reopen the widgets that were open when the app last quit, on servers still saved. */
+async function restoreWidgets() {
+    const saved = new Set((await servers.list()).map((server) => server.id));
+    const keep = (prefs.widgets ?? []).filter((widget) => saved.has(widget.serverId));
+    await savePreferences({ widgets: keep });
+
+    for (const widget of keep) {
+        await openWidget(widget.kind, widget.serverId, widget);
+    }
 }
 
 /** Start the pretend server and point every saved demo server at it. */
@@ -724,6 +800,7 @@ function registerIpc() {
         return { ok: true, server };
     });
     handle('servers:remove', async (id) => {
+        closeWidgetsFor(String(id));
         await servers.remove(String(id));
         await banLists.update((groups) => ({ groups: dropServer(groups, String(id)) }));
         clearCache(String(id));
@@ -806,7 +883,6 @@ function registerIpc() {
             'theme',
             'accent',
             'railCollapsed',
-            'sidebarCollapsed',
             'notifyServerDown',
             'notifyWatched',
             'watchlist',
@@ -822,10 +898,10 @@ function registerIpc() {
             applyLoginItem(next.launchAtLogin);
         }
 
-        if (miniWindow) {
-            miniWindow.setOpacity(next.miniOpacity);
-            miniWindow.setAlwaysOnTop(next.miniAlwaysOnTop, 'screen-saver');
-        }
+        widgetWindows.forEach((window) => {
+            window.setOpacity(next.miniOpacity);
+            window.setAlwaysOnTop(next.miniAlwaysOnTop, 'screen-saver');
+        });
 
         BrowserWindow.getAllWindows().forEach((window) => window.webContents.send('preferences:changed', next));
 
@@ -835,8 +911,16 @@ function registerIpc() {
     handle('limits', () => LIMITS);
     handle('app:info', () => ({ version: app.getVersion(), dataPath: app.getPath('userData') }));
 
-    handle('mini:open', (id) => openMini(String(id)));
-    handle('mini:close', () => miniWindow?.close());
+    handle('widgets:open', (kind, id) => openWidget(String(kind), String(id)));
+    handle('widgets:list', () => openWidgets());
+    // From the main window, a widget by ID; from a widget, itself.
+    ipcMain.handle('widgets:close', (event, id) => {
+        const window = id ? widgetWindows.get(String(id)) : BrowserWindow.fromWebContents(event.sender);
+
+        if (window && window !== mainWindow) {
+            window.close();
+        }
+    });
     handle('main:focus', () => showMain());
     handle('external:open', (url) => openExternal(String(url)));
 
@@ -912,6 +996,10 @@ if (!app.requestSingleInstanceLock()) {
         createMainWindow({ hidden });
         await demoReady;
 
+        if (!automated) {
+            restoreWidgets().catch((error) => console.error('[widgets] could not reopen:', error));
+        }
+
         // Keep the sign-in entry pointing at this copy of the app (it may have moved or updated).
         if (prefs.launchAtLogin) {
             applyLoginItem(true);
@@ -933,7 +1021,7 @@ if (!app.requestSingleInstanceLock()) {
 
         if (process.env.PANEL_SCREENSHOTS) {
             const { captureViews } = await import('../scripts/capture.mjs');
-            await captureViews({ app, mainWindow, openMini, getMini: () => miniWindow, dir: process.env.PANEL_SCREENSHOTS }).catch((error) => {
+            await captureViews({ app, mainWindow, openWidget, getWidget: (kind) => widgetWindows.get(openWidgets().find((widget) => widget.kind === kind)?.id ?? ''), dir: process.env.PANEL_SCREENSHOTS }).catch((error) => {
                 console.error('[capture] failed:', error);
                 app.exit(1);
             });

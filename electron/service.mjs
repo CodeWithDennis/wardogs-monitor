@@ -6,7 +6,7 @@ import { activity, banLists, servers } from './store.mjs';
 /**
  * What the window asks for, shaped the way the website's
  * GameServerPresenter shapes it. Reads that several views share are cached
- * briefly, so the main window and the mini monitor polling together cost
+ * briefly, so the main window and its widgets polling together cost
  * one request, not two.
  */
 

@@ -8,7 +8,7 @@ import path from 'node:path';
  */
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export async function captureViews({ app, mainWindow, openMini, getMini, dir }) {
+export async function captureViews({ app, mainWindow, openWidget, getWidget, dir }) {
     await mkdir(dir, { recursive: true });
     const web = mainWindow.webContents;
     web.on('console-message', (_event, level, message) => level >= 2 && console.log('[page]', message));
@@ -85,12 +85,12 @@ export async function captureViews({ app, mainWindow, openMini, getMini, dir }) 
         await shot(`${String(index + 5).padStart(2, '0')}-${view}`);
     }
 
-    await run(`window.panel.preferences.set({ railCollapsed: true, sidebarCollapsed: true })`);
+    await run(`window.panel.preferences.set({ railCollapsed: true })`);
     web.reload();
     await new Promise((resolve) => web.once('did-finish-load', resolve));
     await wait(3000);
     await shot('10b-collapsed');
-    await run(`window.panel.preferences.set({ railCollapsed: false, sidebarCollapsed: false })`);
+    await run(`window.panel.preferences.set({ railCollapsed: false })`);
     web.reload();
     await new Promise((resolve) => web.once('did-finish-load', resolve));
     await wait(3000);
@@ -212,11 +212,11 @@ export async function captureViews({ app, mainWindow, openMini, getMini, dir }) 
     console.log('[capture] licence after activating:', await run(`window.panel.license.status().then((s) => s.state)`));
     await shot('23-licensed');
 
-    // Window sizes: from the smallest the window allows (the sidebar folds on its own there) up.
+    // Window sizes: from the smallest the window allows up.
     await run(`document.querySelector('[data-section="control"]')?.click()`);
     await wait(500);
 
-    for (const [width, height] of [[1100, 640], [1180, 720], [1440, 900], [2560, 1400]]) {
+    for (const [width, height] of [[1360, 640], [1440, 900], [2560, 1400]]) {
         mainWindow.unmaximize();
         mainWindow.setSize(width, height);
         await wait(1500);
@@ -231,10 +231,24 @@ export async function captureViews({ app, mainWindow, openMini, getMini, dir }) 
     mainWindow.setSize(1500, 920);
     await wait(600);
 
+    // The widget picker, then one of each widget on the first server.
     const serverId = await run(`window.panel.servers.list().then((list) => list[0].id)`);
-    await openMini(serverId);
-    await wait(3000);
-    await shot('14-mini', getMini());
+    await click('[data-view="overview"]');
+    await wait(600);
+    await click('.hero-buttons .icon-btn');
+    await wait(700);
+    await shot('14-widget-picker');
+    await run(`document.querySelector('.modal .close')?.click()`);
+
+    for (const kind of ['status', 'score', 'players', 'actions']) {
+        await openWidget(kind, serverId);
+    }
+
+    await wait(3500);
+
+    for (const kind of ['status', 'score', 'players', 'actions']) {
+        await shot(`14-widget-${kind}`, getWidget(kind));
+    }
 
     app.quit();
 }

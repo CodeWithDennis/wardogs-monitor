@@ -110,7 +110,6 @@ const openUrl = (url: string) => window.panel.openExternal(url);
 const SHORTCUTS = [
     ['Ctrl+K', 'Search everything: players on every server, servers, views and actions'],
     ['Ctrl+H', 'All servers as cards'],
-    ['Ctrl+B', 'Show or hide the sidebar'],
     ['Ctrl+1 … Ctrl+6', 'Open Overview, Players, Match, Rotation, Bans, Settings'],
     ['Ctrl + / Ctrl -', 'Zoom in and out (Ctrl+mouse wheel works too)'],
     ['Ctrl+0', 'Reset zoom'],
@@ -194,8 +193,8 @@ const SHORTCUTS = [
 
             <div class="group">
                 <div class="group-text">
-                    <h3>Mini monitor</h3>
-                    <p class="muted">The small live window you can keep over the game.</p>
+                    <h3>Widgets</h3>
+                    <p class="muted">Small live windows you can keep over the game: status, score, top players and quick actions. Open them from the sidebar; they reopen where you left them.</p>
                 </div>
                 <div class="stack">
                     <label class="switch">
