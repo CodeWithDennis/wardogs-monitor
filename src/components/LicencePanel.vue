@@ -22,23 +22,6 @@ const websiteHost = BRAND.website ? new URL(BRAND.website).hostname : 'the websi
 
 const date = (iso: string): string => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
-/** "Clan plan · up to 5 servers · 3 PCs". */
-const planLine = computed(() => {
-    const licence = status.value;
-
-    if (!licence) {
-        return '';
-    }
-
-    const parts = [licence.plan ? `${planName(licence.plan)} plan` : 'Licence', licence.maxServers === null ? 'unlimited servers' : `up to ${serverCount(licence.maxServers)}`];
-
-    if (licence.seats) {
-        parts.push(`${licence.seats.max} ${licence.seats.max === 1 ? 'PC' : 'PCs'}`);
-    }
-
-    return parts.join(' · ');
-});
-
 /** "Renews 17 Nov 2026", "Cancels on …", or what to do about a failed payment. */
 const renewalLine = computed(() => {
     const licence = status.value;
@@ -72,6 +55,61 @@ const renewalLine = computed(() => {
 });
 
 const paymentFailed = computed(() => status.value?.subscription?.status === 'past_due' || status.value?.subscription?.status === 'incomplete');
+
+/** The short word in the card's corner: "Active", "12 days left", "Ended". */
+const stateLabel = computed(() => {
+    const licence = status.value;
+
+    if (!licence) {
+        return '';
+    }
+
+    if (licence.state === 'licensed') {
+        return paymentFailed.value ? 'Payment failed' : 'Active';
+    }
+
+    if (licence.state === 'trial') {
+        return `${licence.trialDaysLeft} ${licence.trialDaysLeft === 1 ? 'day' : 'days'} left`;
+    }
+
+    return licence.reason === 'offline' ? 'Needs a check' : licence.reason === 'revoked' ? 'Revoked' : 'Ended';
+});
+
+/** The licence's details as label and value pairs, shown as tiles under the status. */
+const facts = computed(() => {
+    const licence = status.value;
+
+    if (licence?.state === 'trial') {
+        return [
+            { label: 'Trial', value: `${licence.trialDaysLeft} of ${licence.trialDays} days left`, warn: false },
+            { label: 'Servers', value: `Up to ${serverCount(licence.maxServers)}`, warn: false },
+        ];
+    }
+
+    if (licence?.state !== 'licensed') {
+        return [];
+    }
+
+    const list = [
+        { label: 'Licensee', value: licence.licensee ?? '—', warn: false },
+        { label: 'Email', value: licence.email ?? '—', warn: false },
+        { label: 'Plan', value: licence.plan ? planName(licence.plan) : 'Licence', warn: false },
+        { label: 'Servers', value: licence.maxServers === null ? 'Unlimited' : `Up to ${serverCount(licence.maxServers)}`, warn: false },
+    ];
+
+    if (licence.seats) {
+        list.push({ label: 'PCs', value: `${licence.seats.used} of ${licence.seats.max} in use`, warn: false });
+    }
+
+    list.push({ label: licence.subscription ? 'Subscription' : 'Expires', value: renewalLine.value, warn: paymentFailed.value });
+
+    return list;
+});
+
+/** Licensed, or ended with a renewal the website may already know about: worth asking it again. */
+const canCheck = computed(() => status.value?.state === 'licensed' || status.value?.reason === 'licence' || status.value?.reason === 'offline');
+
+const showsBilling = computed(() => status.value?.state === 'licensed' || (status.value?.reason === 'licence' && !!status.value.subscription));
 
 /** Check with the website now (picks up a renewal or an upgrade). */
 async function check(): Promise<void> {
@@ -127,19 +165,20 @@ const buy = () => BRAND.website && window.panel.openExternal(BRAND.website);
 </script>
 
 <template>
-    <div class="licence">
-        <div class="status card" :class="status?.state">
-            <component :is="status?.state === 'licensed' ? BadgeCheck : status?.state === 'trial' ? Clock : Lock" class="status-icon" />
-            <div class="status-text">
+    <div class="stack">
+        <section class="card panel status" :class="status?.state">
+            <header class="panel-head">
+                <span class="panel-title">
+                    <span class="panel-icon"><component :is="status?.state === 'licensed' ? BadgeCheck : status?.state === 'trial' ? Clock : Lock" /></span>
+                    Licence
+                </span>
+                <span v-if="status" class="pill" :class="status.state === 'licensed' && !paymentFailed ? 'pill-ok' : status.state === 'trial' ? 'pill-gold' : 'pill-bad'">{{ stateLabel }}</span>
+            </header>
+
+            <div class="summary">
                 <template v-if="status?.state === 'licensed'">
                     <h3>Licensed to {{ status.licensee }}</h3>
-                    <p class="muted">{{ planLine }} · {{ status.email }}</p>
-                    <p :class="paymentFailed ? 'warn' : 'muted'">{{ renewalLine }}</p>
-                    <p class="muted online">
-                        {{ status.onlineConfirmed ? `Checked online ${ago(status.lastCheckedAt, now)}` : 'Not yet confirmed online' }}
-                        <button type="button" class="btn btn-ghost btn-sm" :disabled="checking" @click="check"><RefreshCw /> {{ checking ? 'Checking…' : 'Check now' }}</button>
-                    </p>
-                    <p v-if="status.onlineError" class="warn">{{ status.onlineError }}</p>
+                    <p class="muted">Every server on your plan works. Renewals and upgrades are picked up by themselves.</p>
                 </template>
                 <template v-else-if="status?.state === 'trial'">
                     <h3>Free trial · {{ status.trialDaysLeft }} {{ status.trialDaysLeft === 1 ? 'day' : 'days' }} left</h3>
@@ -149,7 +188,7 @@ const buy = () => BRAND.website && window.panel.openExternal(BRAND.website);
                     <h3>
                         {{
                             status.reason === 'licence'
-                                ? `Your licence ended on ${status.expires}`
+                                ? `Your licence ended on ${status.expires ? date(status.expires) : 'its last day'}`
                                 : status.reason === 'revoked'
                                   ? 'Your licence was revoked'
                                   : status.reason === 'offline'
@@ -166,46 +205,53 @@ const buy = () => BRAND.website && window.panel.openExternal(BRAND.website);
                                   : 'Your servers are locked until a licence is activated. The demo server still works.'
                         }}
                     </p>
-                    <p v-if="status.reason === 'licence' || status.reason === 'offline'" class="muted online">
-                        <button type="button" class="btn btn-ghost btn-sm" :disabled="checking" @click="check"><RefreshCw /> {{ checking ? 'Checking…' : 'Check now' }}</button>
-                    </p>
                 </template>
             </div>
-            <div v-if="status?.state === 'licensed' || (status?.reason === 'licence' && status.subscription)" class="status-actions">
-                <button v-if="BILLING_URL" type="button" class="btn btn-primary" @click="openBilling"><CreditCard /> Manage subscription</button>
-                <button v-if="status?.state === 'licensed'" type="button" class="btn btn-ghost" @click="remove">Remove from this PC</button>
-            </div>
-            <button v-else-if="BRAND.website" type="button" class="btn btn-primary" @click="buy"><ShoppingCart /> Buy a licence</button>
-        </div>
 
-        <form v-if="status?.state !== 'licensed'" class="activate" @submit.prevent="activate">
-            <label class="field">
-                <span class="field-label">Licence key</span>
-                <textarea v-model="key" class="textarea mono" rows="3" :placeholder="`${BRAND.licenseKeyPrefix}-…`" spellcheck="false" @keydown.enter.prevent="activate" />
-                <span class="field-hint">Paste the key from your purchase email. It is checked on this PC, then confirmed with {{ websiteHost }}: only the key, a random ID for this PC and the PC's name are sent.</span>
-            </label>
-            <p v-if="error" class="field-error" role="alert">{{ error }}</p>
-            <div>
-                <button type="submit" class="btn btn-primary" :disabled="busy || key.trim() === ''"><KeyRound /> Activate licence</button>
-            </div>
-        </form>
+            <dl v-if="facts.length" class="facts">
+                <div v-for="fact in facts" :key="fact.label" class="fact">
+                    <dt>{{ fact.label }}</dt>
+                    <dd :class="{ warn: fact.warn }">{{ fact.value }}</dd>
+                </div>
+            </dl>
+
+            <p v-if="status?.state === 'licensed' && status.onlineError" class="online-error warn">{{ status.onlineError }}</p>
+
+            <footer v-if="canCheck || showsBilling || BRAND.website" class="status-foot panel-flush">
+                <span v-if="canCheck" class="online">
+                    <span v-if="status?.state === 'licensed'" class="muted">{{ status.onlineConfirmed ? `Checked online ${ago(status.lastCheckedAt, now)}` : 'Not yet confirmed online' }}</span>
+                    <button type="button" class="btn btn-ghost btn-sm" :disabled="checking" @click="check"><RefreshCw /> {{ checking ? 'Checking…' : 'Check now' }}</button>
+                </span>
+                <span class="status-actions">
+                    <template v-if="showsBilling">
+                        <button v-if="status?.state === 'licensed'" type="button" class="btn btn-ghost" @click="remove">Remove from this PC</button>
+                        <button v-if="BILLING_URL" type="button" class="btn btn-primary" @click="openBilling"><CreditCard /> Manage subscription</button>
+                    </template>
+                    <button v-else-if="BRAND.website" type="button" class="btn btn-primary" @click="buy"><ShoppingCart /> Buy a licence</button>
+                </span>
+            </footer>
+        </section>
+
+        <section v-if="status?.state !== 'licensed'" class="card panel">
+            <header class="panel-head">
+                <span class="panel-title"><span class="panel-icon"><KeyRound /></span> Activate a licence</span>
+            </header>
+            <p class="panel-intro">Paste the key from your purchase email. It is checked on this PC, then confirmed with {{ websiteHost }}: only the key, a random ID for this PC and the PC's name are sent.</p>
+            <form class="activate" @submit.prevent="activate">
+                <label class="field">
+                    <span class="field-label">Licence key</span>
+                    <textarea v-model="key" class="textarea mono" rows="3" :placeholder="`${BRAND.licenseKeyPrefix}-…`" spellcheck="false" @keydown.enter.prevent="activate" />
+                </label>
+                <p v-if="error" class="field-error" role="alert">{{ error }}</p>
+                <div>
+                    <button type="submit" class="btn btn-primary" :disabled="busy || key.trim() === ''"><KeyRound /> Activate licence</button>
+                </div>
+            </form>
+        </section>
     </div>
 </template>
 
 <style scoped>
-.licence {
-    display: grid;
-    gap: 22px;
-}
-
-.status {
-    display: flex;
-    align-items: center;
-    gap: 18px;
-    padding: 20px 22px;
-    background: var(--panel);
-}
-
 .status.licensed {
     border-color: color-mix(in srgb, var(--ok) 40%, transparent);
 }
@@ -214,60 +260,107 @@ const buy = () => BRAND.website && window.panel.openExternal(BRAND.website);
     border-color: color-mix(in srgb, var(--bad) 45%, transparent);
 }
 
-.status-icon {
-    width: 30px;
-    height: 30px;
-    flex: none;
-    color: var(--accent);
-}
-
-.licensed .status-icon {
+/* The header's icon tile takes the state's colour: green when licensed, red when it ended. */
+.licensed .panel-icon {
+    background: color-mix(in srgb, var(--ok) 14%, transparent);
     color: var(--ok);
 }
 
-.expired .status-icon {
+.expired .panel-icon {
+    background: var(--bad-soft);
     color: var(--bad);
 }
 
-.status-text {
-    flex: 1;
-    min-width: 0;
-}
-
-.status-text h3 {
+.summary h3 {
     margin: 0;
     font-family: var(--font-title);
-    font-size: 16.5px;
+    font-size: 18px;
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
 }
 
-.status-text p {
-    margin: 5px 0 0;
+.summary p {
+    margin: 6px 0 0;
     font-size: 13.5px;
     line-height: 1.55;
 }
 
-.activate {
+.facts {
     display: grid;
-    gap: 14px;
-    max-width: 720px;
+    grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+    gap: 10px;
+    margin: 18px 0 0;
+}
+
+.fact {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    padding: 11px 13px;
+    border: 1px solid var(--line-soft);
+    border-radius: var(--radius);
+    background: var(--panel);
+}
+
+.fact dt {
+    color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.fact dd {
+    margin: 0;
+    font-size: 14px;
+    overflow-wrap: anywhere;
+    user-select: text;
+}
+
+.warn {
+    color: var(--warn);
+}
+
+.online-error {
+    margin: 14px 0 0;
+    font-size: 13.5px;
+}
+
+/* Under a line at the card's foot: the online check on the left, what to do about the licence on the right. */
+.status-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 18px;
+    padding: 13px 20px;
+    border-top: 1px solid var(--line-soft);
+}
+
+.online {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13.5px;
 }
 
 .status-actions {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
+    margin-left: auto;
 }
 
-.status-text .warn {
-    color: var(--warn);
+.activate {
+    display: grid;
+    gap: 14px;
 }
 
-.status-text .online {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+@container page (max-width: 760px) {
+    .status-actions {
+        margin-left: 0;
+    }
 }
 </style>

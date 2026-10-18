@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowDown, ArrowUp, GripVertical, Pencil, Plus, Repeat, Trash2 } from 'lucide-vue-next';
+import { ArrowDown, ArrowUp, GripVertical, ListOrdered, Pencil, Plus, Repeat, SlidersHorizontal, Trash2, WifiOff } from 'lucide-vue-next';
 import { computed, onMounted, ref } from 'vue';
 import MapArt from '@/components/MapArt.vue';
 import MapPicker from '@/components/MapPicker.vue';
@@ -160,77 +160,129 @@ function describe(entry: RotationEntry): string {
     </ViewHeader>
 
     <div class="view-body narrow">
-        <p v-if="error" class="muted">{{ error }}</p>
+        <section v-if="error" class="card panel">
+            <header class="panel-head">
+                <span class="panel-title"><span class="panel-icon"><ListOrdered /></span> Matches</span>
+            </header>
+            <div class="empty">
+                <WifiOff />
+                <strong>Could not read the rotation</strong>
+                <span>{{ error }}</span>
+            </div>
+        </section>
 
         <template v-else-if="draft">
-            <div class="card controls">
-                <label class="switch">
-                    <button type="button" role="switch" class="toggle" :aria-checked="draft.enabled" @click="draft.enabled = !draft.enabled" />
-                    <span>
-                        <strong>{{ draft.enabled ? 'Rotation on' : 'Rotation off' }}</strong>
-                        <small class="muted">{{ draft.enabled ? 'The server moves through these maps.' : 'The map reloads when a match ends.' }}</small>
-                    </span>
-                </label>
-                <div class="segmented" role="group" aria-label="Order">
-                    <button v-for="mode in state.limits?.rotationModes ?? ['Ordered', 'Random']" :key="mode" type="button" :class="{ on: draft.mode === mode }" @click="draft.mode = mode">{{ mode }}</button>
-                </div>
-            </div>
+            <div class="stack">
+                <section class="card panel">
+                    <header class="panel-head">
+                        <span class="panel-title"><span class="panel-icon"><SlidersHorizontal /></span> Settings</span>
+                        <span class="panel-aside">Applies from the next match</span>
+                    </header>
+                    <div class="settings panel-flush">
+                        <label class="setting">
+                            <span class="setting-text">
+                                <strong>{{ draft.enabled ? 'Rotation on' : 'Rotation off' }}</strong>
+                                <small>{{ draft.enabled ? 'The server moves through these maps.' : 'The map reloads when a match ends.' }}</small>
+                            </span>
+                            <button type="button" role="switch" class="toggle" :aria-checked="draft.enabled" @click="draft.enabled = !draft.enabled" />
+                        </label>
+                        <div class="setting">
+                            <span class="setting-text">
+                                <strong>Order</strong>
+                                <small>{{ draft.mode === 'Random' ? 'Each next match is picked at random.' : 'The matches play from top to bottom.' }}</small>
+                            </span>
+                            <div class="segmented" role="group" aria-label="Order">
+                                <button v-for="mode in state.limits?.rotationModes ?? ['Ordered', 'Random']" :key="mode" type="button" :class="{ on: draft.mode === mode }" @click="draft.mode = mode">{{ mode }}</button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
 
-            <div class="section-label list-label">
-                <span>Matches</span>
-                <span>{{ draft.entries.length }} / {{ max }}</span>
-            </div>
+                <section class="card panel matches">
+                    <header class="panel-head">
+                        <span class="panel-title"><span class="panel-icon"><ListOrdered /></span> Matches</span>
+                        <span class="panel-aside">{{ draft.entries.length }} / {{ max }}</span>
+                    </header>
 
-            <ol class="entries" @dragover.prevent @drop.prevent="drop">
-                <li
-                    v-for="(entry, index) in draft.entries"
-                    :key="`${index}-${entry.map}-${entry.experiences.join('+')}`"
-                    class="entry"
-                    :class="{ dragging: dragging === index, 'drop-before': dropAt === index && dragging !== null && dragging !== index && dragging !== index - 1, now: marker(index) === 'now' }"
-                    draggable="true"
-                    @dragstart="dragging = index"
-                    @dragend="dragging = null; dropAt = null"
-                    @dragover.prevent="dropAt = ($event.offsetY > ($event.currentTarget as HTMLElement).offsetHeight / 2) ? index + 1 : index"
-                    @dblclick="edit(index)"
-                >
-                    <GripVertical class="grip" />
-                    <span class="pos num muted">{{ index + 1 }}</span>
-                    <MapArt :map="entry.map" :lighting="entry.lighting" variant="wide" :fade="false" class="thumb" />
-                    <span class="text">
-                        <span class="name">
-                            {{ mapName(entry.map) }} <span class="muted">· {{ modeName(entry.experiences) }}</span>
-                            <span v-if="marker(index)" class="pill" :class="marker(index) === 'now' ? 'pill-gold' : ''">{{ marker(index) === 'now' ? 'Playing' : 'Next' }}</span>
-                        </span>
-                        <small class="muted truncate">{{ describe(entry) || 'Server picks lighting and zone' }}</small>
-                    </span>
-                    <span class="tools">
-                        <button type="button" title="Move up" :disabled="index === 0" @click="move(index, index - 1)"><ArrowUp /></button>
-                        <button type="button" title="Move down" :disabled="index === draft.entries.length - 1" @click="move(index, index + 1)"><ArrowDown /></button>
-                        <button type="button" title="Change" @click="edit(index)"><Pencil /></button>
-                        <button type="button" title="Remove" class="bad" @click="remove(index)"><Trash2 /></button>
-                    </span>
-                </li>
-                <li v-if="dropAt === draft.entries.length && dragging !== null" class="drop-end" />
-            </ol>
+                    <template v-if="draft.entries.length">
+                        <p class="panel-intro">Drag to reorder, or double-click a match to change it.</p>
 
-            <div v-if="draft.entries.length === 0" class="empty">
-                <Repeat />
-                <span>No matches yet. Add the first one.</span>
+                        <ol class="entries panel-flush" @dragover.prevent @drop.prevent="drop">
+                            <li
+                                v-for="(entry, index) in draft.entries"
+                                :key="`${index}-${entry.map}-${entry.experiences.join('+')}`"
+                                class="entry"
+                                :class="{ dragging: dragging === index, 'drop-before': dropAt === index && dragging !== null && dragging !== index && dragging !== index - 1, now: marker(index) === 'now' }"
+                                draggable="true"
+                                @dragstart="dragging = index"
+                                @dragend="dragging = null; dropAt = null"
+                                @dragover.prevent="dropAt = ($event.offsetY > ($event.currentTarget as HTMLElement).offsetHeight / 2) ? index + 1 : index"
+                                @dblclick="edit(index)"
+                            >
+                                <GripVertical class="grip" />
+                                <span class="pos num muted">{{ index + 1 }}</span>
+                                <MapArt :map="entry.map" :lighting="entry.lighting" variant="wide" :fade="false" class="thumb" />
+                                <span class="text">
+                                    <span class="name">
+                                        {{ mapName(entry.map) }} <span class="muted">· {{ modeName(entry.experiences) }}</span>
+                                        <span v-if="marker(index)" class="pill" :class="marker(index) === 'now' ? 'pill-gold' : ''">{{ marker(index) === 'now' ? 'Playing' : 'Next' }}</span>
+                                    </span>
+                                    <small class="muted truncate">{{ describe(entry) || 'Server picks lighting and zone' }}</small>
+                                </span>
+                                <span class="tools">
+                                    <button type="button" title="Move up" :disabled="index === 0" @click="move(index, index - 1)"><ArrowUp /></button>
+                                    <button type="button" title="Move down" :disabled="index === draft.entries.length - 1" @click="move(index, index + 1)"><ArrowDown /></button>
+                                    <button type="button" title="Change" @click="edit(index)"><Pencil /></button>
+                                    <button type="button" title="Remove" class="bad" @click="remove(index)"><Trash2 /></button>
+                                </span>
+                            </li>
+                            <li v-if="dropAt === draft.entries.length && dragging !== null" class="drop-end" />
+                        </ol>
+                    </template>
+
+                    <div v-else class="empty">
+                        <Repeat />
+                        <strong>No matches yet</strong>
+                        <span>Add the first map, and the server plays it when the current match ends.</span>
+                        <button type="button" class="btn btn-primary" @click="add"><Plus /> Add match</button>
+                    </div>
+                </section>
             </div>
 
             <SaveBar :show="dirty || !!saveError" :saving="saving" :error="saveError" note="Unsaved rotation. It applies from the next match." @save="save" @discard="load" />
         </template>
 
-        <div v-else aria-busy="true" aria-label="Loading the rotation">
-            <div class="skeleton" style="height: 62px" />
-            <div class="skeleton" style="height: 12px; width: 90px; margin-top: 33px" />
-            <div v-for="i in 4" :key="i" class="entry skeleton-entry">
-                <div class="skeleton" style="width: 81.5px; height: 46px" />
-                <div class="grow">
-                    <div class="skeleton" style="height: 15px" :style="{ width: `${40 + i * 7}%` }" />
-                    <div class="skeleton" style="height: 11px; width: 30%; margin-top: 8px" />
+        <div v-else class="stack" aria-busy="true" aria-label="Loading the rotation">
+            <section class="card panel">
+                <header class="panel-head">
+                    <div class="skeleton" style="height: 28px; width: 120px" />
+                </header>
+                <div class="settings panel-flush">
+                    <div v-for="i in 2" :key="i" class="setting">
+                        <div class="grow">
+                            <div class="skeleton" style="height: 15px; width: 25%" />
+                            <div class="skeleton" style="height: 11px; width: 45%; margin-top: 8px" />
+                        </div>
+                        <div class="skeleton" style="height: 21px" :style="{ width: i === 1 ? '37.5px' : '140px' }" />
+                    </div>
                 </div>
-            </div>
+            </section>
+
+            <section class="card panel">
+                <header class="panel-head">
+                    <div class="skeleton" style="height: 28px; width: 120px" />
+                    <div class="skeleton" style="height: 12px; width: 45px" />
+                </header>
+                <div class="entries panel-flush">
+                    <div v-for="i in 4" :key="i" class="entry skeleton-entry">
+                        <div class="skeleton" style="width: 81.5px; height: 44px" />
+                        <div class="grow">
+                            <div class="skeleton" style="height: 15px" :style="{ width: `${40 + i * 7}%` }" />
+                            <div class="skeleton" style="height: 11px; width: 30%; margin-top: 8px" />
+                        </div>
+                    </div>
+                </div>
+            </section>
         </div>
     </div>
 
@@ -244,41 +296,65 @@ function describe(entry: RotationEntry): string {
 </template>
 
 <style scoped>
-.controls {
+/* One setting per row: what it does on the left, its control on the right. */
+.setting {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 17.5px;
-    padding: 15.5px 20px;
+    padding: 14px 20px;
+    border-top: 1px solid var(--line-soft);
 }
 
-.switch {
-    display: flex;
-    align-items: center;
-    gap: 15.5px;
+label.setting {
+    cursor: pointer;
 }
 
-.switch span {
+.setting-text {
     display: grid;
+    gap: 2px;
+    min-width: 0;
 }
 
-.switch strong {
+.setting-text strong {
     font-weight: 500;
 }
 
-.switch small {
+.setting-text small {
+    color: var(--muted);
     font-size: 13px;
 }
 
-.list-label {
-    margin-top: 31px;
+.setting .segmented {
+    flex: none;
+    padding: 2px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--input);
+}
+
+.setting .segmented button {
+    height: 26px;
+}
+
+/* The rows reach the card's rounded corners, so the card clips their hover. */
+.matches {
+    overflow: hidden;
+}
+
+.empty strong {
+    color: var(--text);
+    font-weight: 500;
+}
+
+.empty .btn {
+    margin-top: 6.5px;
 }
 
 .entries {
-    margin: 0;
     padding: 0;
     list-style: none;
+    border-top: 1px solid var(--line-soft);
 }
 
 .entry {
@@ -287,10 +363,15 @@ function describe(entry: RotationEntry): string {
     align-items: center;
     gap: 13px;
     min-height: 64px;
-    padding: 9px 11px 9px 6.5px;
+    padding: 9px 14px 9px 12px;
     border-left: 2px solid transparent;
     border-bottom: 1px solid var(--line-soft);
     cursor: grab;
+    transition: background 0.1s;
+}
+
+.entry:last-child {
+    border-bottom: 0;
 }
 
 .entry:hover {
@@ -371,7 +452,8 @@ function describe(entry: RotationEntry): string {
     transition: opacity 0.1s;
 }
 
-.entry:hover .tools {
+.entry:hover .tools,
+.entry:focus-within .tools {
     opacity: 1;
 }
 
@@ -387,7 +469,7 @@ function describe(entry: RotationEntry): string {
 }
 
 .tools button:hover:not(:disabled) {
-    background: rgb(255 255 255 / 0.06);
+    background: var(--hover);
     color: var(--text);
 }
 
@@ -404,9 +486,10 @@ function describe(entry: RotationEntry): string {
     height: 15.5px;
 }
 
+/* Skeleton rows leave room for the drag handle and number the real rows have. */
 .skeleton-entry {
     cursor: default;
-    padding-left: 41px;
+    padding-left: 73.5px;
 }
 
 .skeleton-entry:hover {
@@ -418,7 +501,14 @@ function describe(entry: RotationEntry): string {
     min-width: 0;
 }
 
-/* A narrow page: no picture or drag handle, so the match's name keeps its room. */
+/* A narrow page: the settings' controls wrap under their text. */
+@container page (max-width: 760px) {
+    .setting {
+        flex-wrap: wrap;
+    }
+}
+
+/* A narrower page: no picture or drag handle, so the match's name keeps its room. */
 @container page (max-width: 560px) {
     .entry .thumb,
     .grip {
@@ -426,7 +516,7 @@ function describe(entry: RotationEntry): string {
     }
 
     .skeleton-entry {
-        padding-left: 6.5px;
+        padding-left: 45px;
     }
 
     .name {

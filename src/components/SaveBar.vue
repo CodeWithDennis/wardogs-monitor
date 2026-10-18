@@ -18,17 +18,24 @@ const emit = defineEmits<{ save: []; discard: [] }>();
 </template>
 
 <style scoped>
+/*
+ * A floating card that sticks to the bottom of the page while it scrolls,
+ * as wide as the content above it, so it never runs off past the page's
+ * edges or under the detail panel.
+ */
 .save-bar {
     position: sticky;
-    bottom: 0;
+    bottom: 16px;
     z-index: 5;
     display: flex;
     align-items: center;
     gap: 13px;
-    margin: 26.5px -35px -39.5px;
-    padding: 15.5px 35px;
-    border-top: 1px solid var(--accent-line);
-    background: color-mix(in srgb, var(--panel) 96%, transparent);
+    margin-top: 22px;
+    padding: 12px 14px 12px 18px;
+    border: 1px solid var(--accent-line);
+    border-radius: var(--radius);
+    background: color-mix(in srgb, var(--panel) 94%, transparent);
+    box-shadow: var(--shadow-pop);
     backdrop-filter: blur(9px);
 }
 
@@ -43,12 +50,10 @@ const emit = defineEmits<{ save: []; discard: [] }>();
     color: var(--bad);
 }
 
-/* On a narrow page the body pads less, and the buttons wrap under the message. */
+/* On a narrow page the buttons wrap under the message. */
 @container page (max-width: 760px) {
     .save-bar {
         flex-wrap: wrap;
-        margin: 22px -20px -33px;
-        padding: 13px 20px;
     }
 
     .text {
