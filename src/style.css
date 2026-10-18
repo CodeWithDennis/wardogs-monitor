@@ -615,6 +615,92 @@ a {
     border-top: 1px solid var(--accent-line);
 }
 
+/*
+ * The page building block: a card with a header (an icon in an accent tile,
+ * a title, and something on the right like a count or a link) over padded
+ * content. Pages stack these with .stack, one gap between them.
+ *
+ *   <section class="card panel">
+ *     <header class="panel-head">
+ *       <span class="panel-title"><span class="panel-icon"><Icon /></span> Title</span>
+ *       <span class="panel-aside">…</span>
+ *     </header>
+ *     …
+ *   </section>
+ */
+.panel {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding: 18px 20px;
+}
+
+.panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+    margin-bottom: 16px;
+}
+
+.panel-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    font-size: 14.5px;
+    font-weight: 600;
+}
+
+.panel-icon {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    flex: none;
+    border-radius: var(--radius);
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+.panel-icon svg {
+    width: 15px;
+    height: 15px;
+}
+
+.panel-aside {
+    flex: none;
+    color: var(--muted);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+}
+
+/* A line under the title that says what the card is for. */
+.panel-intro {
+    margin: -8px 0 16px;
+    color: var(--text-2);
+    font-size: 13.5px;
+    line-height: 1.5;
+}
+
+/* Rows inside a card run edge to edge, under the card's own padding. */
+.panel-flush {
+    margin: 0 -20px;
+}
+
+.panel-flush:last-child {
+    margin-bottom: -18px;
+}
+
+/* Cards one under another. */
+.stack {
+    display: grid;
+    gap: 18px;
+    align-content: start;
+    min-width: 0;
+}
+
 .kv {
     display: grid;
     grid-template-columns: 105.5px 1fr;

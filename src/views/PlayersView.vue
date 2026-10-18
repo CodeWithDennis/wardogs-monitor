@@ -120,6 +120,17 @@ const players = computed(() => {
     return held ? sorted.sort((a, b) => (held.get(a.steamId) ?? Infinity) - (held.get(b.steamId) ?? Infinity)) : sorted;
 });
 
+/** The table card's title, icon and count follow the tab: everyone, one faction, the watchlist or who left. */
+const card = computed(() => {
+    if (faction.value === 'left') {
+        return { title: 'Players who left', icon: UserMinus, aside: `${leftShown.value.length} since the app opened` };
+    }
+
+    const count = `${players.value.length} ${players.value.length === 1 ? 'player' : 'players'}`;
+
+    return faction.value === 'watched' ? { title: 'Watched players', icon: Star, aside: `${count} on` } : { title: faction.value === 'all' ? 'Everyone on' : faction.value, icon: Users, aside: count };
+});
+
 function select(steamId: string): void {
     state.selectedPlayer = state.selectedPlayer === steamId ? null : steamId;
 }
@@ -155,99 +166,137 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
         <SearchField placeholder="Search players by name or Steam ID" :count="faction === 'left' ? leftShown.length : players.length" />
     </div>
 
-    <div class="view-body flush" @contextmenu.self.prevent @pointerleave="releaseOrder">
+    <div class="view-body" @contextmenu.self.prevent>
+        <section class="card panel table-card">
+            <header class="panel-head">
+                <span class="panel-title"><span class="panel-icon"><component :is="card.icon" /></span> <span class="truncate">{{ card.title }}</span></span>
+                <span class="panel-aside">{{ card.aside }}</span>
+            </header>
 
-        <!-- Players who left this server since the app opened -->
-        <template v-if="faction === 'left'">
-            <div class="head left-grid">
-                <span>Player</span>
-                <span class="c-steam">Steam ID</span>
-                <span class="right">K / D</span>
-                <span class="right">Left</span>
-                <span />
+            <div class="panel-flush table" @pointerleave="releaseOrder">
+                <!-- Players who left this server since the app opened -->
+                <template v-if="faction === 'left'">
+                    <div class="head left-grid">
+                        <span>Player</span>
+                        <span class="c-steam">Steam ID</span>
+                        <span class="right">K / D</span>
+                        <span class="right">Left</span>
+                        <span />
+                    </div>
+                    <div v-for="player in leftShown" :key="player.steamId" class="row left-grid gone" @contextmenu="openPlayerMenu($event, player, false)">
+                        <span class="c-name">
+                            <span class="swatch" :style="{ background: player.factionColor ?? 'var(--faint)' }" />
+                            <span class="truncate">{{ player.name }}</span>
+                            <Star v-if="isWatched(player.steamId)" class="star" />
+                        </span>
+                        <span class="mono muted c-steam truncate">{{ player.steamId }}</span>
+                        <span class="right num muted">{{ player.kills }} / {{ player.deaths }}</span>
+                        <TimeAgo class="right muted" :at="player.leftAt" />
+                        <span class="c-tools shown">
+                            <button type="button" class="tool" :title="isWatched(player.steamId) ? 'Stop watching' : 'Watch'" @click="toggleWatch(player)"><Star :class="{ starred: isWatched(player.steamId) }" /></button>
+                            <button type="button" class="tool bad" title="Ban" @click="openPlayerAction('ban', player)"><Ban /></button>
+                        </span>
+                    </div>
+                    <div v-if="leftShown.length === 0" class="empty">
+                        <span class="empty-icon"><UserMinus /></span>
+                        <span>Nobody has left since the app opened. Players who quit show up here, so you can still ban them.</span>
+                    </div>
+                </template>
+
+                <template v-else>
+                    <div class="head player-grid" role="row">
+                        <button
+                            v-for="column in COLUMNS"
+                            :key="column.key"
+                            type="button"
+                            class="sortable"
+                            :class="[column.className, { sorted: state.playersSort.key === column.key }]"
+                            :title="column.title"
+                            :aria-sort="state.playersSort.key === column.key ? (state.playersSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'"
+                            @click="sortBy(column.key)"
+                        >
+                            <span>{{ column.label }}</span>
+                            <component :is="state.playersSort.key === column.key && state.playersSort.dir === 'asc' ? ArrowUp : ArrowDown" class="arrow" />
+                        </button>
+                        <span class="c-tools" />
+                    </div>
+
+                    <div
+                        v-for="player in players"
+                        :id="`player-${player.steamId}`"
+                        :key="player.steamId"
+                        v-memo="[player, state.selectedPlayer === player.steamId, isWatched(player.steamId), watchedEntry(player.steamId)?.note, leaving.has(player.steamId)]"
+                        class="row player player-grid"
+                        :class="{ active: state.selectedPlayer === player.steamId, leaving: leaving.has(player.steamId) }"
+                        @pointerenter="holdOrder"
+                        @click="select(player.steamId)"
+                        @contextmenu="openPlayerMenu($event, player)"
+                    >
+                        <span class="c-name">
+                            <span class="swatch" :style="{ background: player.factionColor ?? 'var(--faint)' }" />
+                            <span class="truncate">{{ player.name }}</span>
+                            <Star v-if="isWatched(player.steamId)" class="star" :title="watchedEntry(player.steamId)?.note || 'Watched'" />
+                        </span>
+                        <span class="c-num num">{{ player.kills }}</span>
+                        <span class="c-num c-deaths num muted">{{ player.deaths }}</span>
+                        <span class="c-num c-kd num kd">{{ ratio(player.kills, player.deaths) }}</span>
+                        <span class="c-cash num muted">${{ number(player.cash) }}</span>
+                        <span class="c-ping num" :class="`ping-${pingLevel(player.pingMs)}`">{{ player.pingMs }}</span>
+                        <span class="c-tools">
+                            <button type="button" class="tool" :title="isWatched(player.steamId) ? 'Stop watching' : 'Watch'" @click.stop="toggleWatch(player)"><Star :class="{ starred: isWatched(player.steamId) }" /></button>
+                            <button type="button" class="tool" title="Message" @click.stop="openPlayerAction('message', player)"><MessageSquare /></button>
+                            <button type="button" class="tool bad" title="Kick" @click.stop="openPlayerAction('kick', player)"><UserX /></button>
+                        </span>
+                    </div>
+
+                    <!-- The first reading is on its way -->
+                    <div v-if="!live" class="skeleton-list rows-skeleton" aria-busy="true" aria-label="Loading players">
+                        <div v-for="i in 9" :key="i" class="skeleton" :style="{ height: '30px', width: `${100 - ((i * 17) % 30)}%` }" />
+                    </div>
+
+                    <div v-if="live && players.length === 0" class="empty">
+                        <span class="empty-icon"><Users /></span>
+                        <span>{{ !live.online ? 'The server is offline.' : state.search ? 'Nobody matches that search.' : faction === 'watched' ? 'No watched player is on. Star players to watch them.' : 'Nobody is playing right now.' }}</span>
+                    </div>
+                </template>
             </div>
-            <div v-for="player in leftShown" :key="player.steamId" class="row left-grid gone" @contextmenu="openPlayerMenu($event, player, false)">
-                <span class="c-name">
-                    <span class="swatch" :style="{ background: player.factionColor ?? 'var(--faint)' }" />
-                    <span class="truncate">{{ player.name }}</span>
-                    <Star v-if="isWatched(player.steamId)" class="star" />
-                </span>
-                <span class="mono muted c-steam truncate">{{ player.steamId }}</span>
-                <span class="right num muted">{{ player.kills }} / {{ player.deaths }}</span>
-                <TimeAgo class="right muted" :at="player.leftAt" />
-                <span class="c-tools shown">
-                    <button type="button" class="tool" :title="isWatched(player.steamId) ? 'Stop watching' : 'Watch'" @click="toggleWatch(player)"><Star :class="{ starred: isWatched(player.steamId) }" /></button>
-                    <button type="button" class="tool bad" title="Ban" @click="openPlayerAction('ban', player)"><Ban /></button>
-                </span>
-            </div>
-            <div v-if="leftShown.length === 0" class="empty">
-                <UserMinus />
-                <span>Nobody has left since the app opened. Players who quit show up here, so you can still ban them.</span>
-            </div>
-        </template>
-
-        <template v-else>
-        <div class="head" role="row">
-            <button
-                v-for="column in COLUMNS"
-                :key="column.key"
-                type="button"
-                class="sortable"
-                :class="[column.className, { sorted: state.playersSort.key === column.key }]"
-                :title="column.title"
-                :aria-sort="state.playersSort.key === column.key ? (state.playersSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'"
-                @click="sortBy(column.key)"
-            >
-                <span>{{ column.label }}</span>
-                <component :is="state.playersSort.key === column.key && state.playersSort.dir === 'asc' ? ArrowUp : ArrowDown" class="arrow" />
-            </button>
-            <span class="c-tools" />
-        </div>
-
-        <div
-            v-for="player in players"
-            :id="`player-${player.steamId}`"
-            :key="player.steamId"
-            v-memo="[player, state.selectedPlayer === player.steamId, isWatched(player.steamId), watchedEntry(player.steamId)?.note, leaving.has(player.steamId)]"
-            class="row player"
-            :class="{ active: state.selectedPlayer === player.steamId, leaving: leaving.has(player.steamId) }"
-            @pointerenter="holdOrder"
-            @click="select(player.steamId)"
-            @contextmenu="openPlayerMenu($event, player)"
-        >
-            <span class="c-name">
-                <span class="swatch" :style="{ background: player.factionColor ?? 'var(--faint)' }" />
-                <span class="truncate">{{ player.name }}</span>
-                <Star v-if="isWatched(player.steamId)" class="star" :title="watchedEntry(player.steamId)?.note || 'Watched'" />
-            </span>
-            <span class="c-num num">{{ player.kills }}</span>
-            <span class="c-num c-deaths num muted">{{ player.deaths }}</span>
-            <span class="c-num c-kd num kd">{{ ratio(player.kills, player.deaths) }}</span>
-            <span class="c-cash num muted">${{ number(player.cash) }}</span>
-            <span class="c-ping num" :class="`ping-${pingLevel(player.pingMs)}`">{{ player.pingMs }}</span>
-            <span class="c-tools">
-                <button type="button" class="tool" :title="isWatched(player.steamId) ? 'Stop watching' : 'Watch'" @click.stop="toggleWatch(player)"><Star :class="{ starred: isWatched(player.steamId) }" /></button>
-                <button type="button" class="tool" title="Message" @click.stop="openPlayerAction('message', player)"><MessageSquare /></button>
-                <button type="button" class="tool bad" title="Kick" @click.stop="openPlayerAction('kick', player)"><UserX /></button>
-            </span>
-        </div>
-
-        <!-- The first reading is on its way -->
-        <div v-if="!live" class="skeleton-list rows-skeleton" aria-busy="true" aria-label="Loading players">
-            <div v-for="i in 9" :key="i" class="skeleton" :style="{ height: '30px', width: `${100 - ((i * 17) % 30)}%` }" />
-        </div>
-
-        <div v-if="live && players.length === 0" class="empty">
-            <Users />
-            <span>{{ !live.online ? 'The server is offline.' : state.search ? 'Nobody matches that search.' : faction === 'watched' ? 'No watched player is on. Star players to watch them.' : 'Nobody is playing right now.' }}</span>
-        </div>
-        </template>
+        </section>
     </div>
 </template>
 
 <style scoped>
-.flush {
-    padding: 9px 0 26.5px;
+/*
+ * The table sits in one card: the column headers and the rows run edge to
+ * edge inside it, split by hairlines. Clipping keeps the hover and the
+ * selected row inside the rounded corners.
+ */
+.table-card {
+    overflow: clip;
+    background: var(--panel);
+}
+
+.table > .row + .row {
+    border-top: 1px solid var(--line-soft);
+}
+
+.empty-icon {
+    display: grid;
+    place-items: center;
+    width: 46px;
+    height: 46px;
+    margin-bottom: 4px;
+    border-radius: 50%;
+    background: var(--raise);
+}
+
+.empty-icon svg {
+    width: 21px;
+    height: 21px;
+}
+
+.empty > span:last-child {
+    max-width: 380px;
+    line-height: 1.5;
 }
 
 .kd {
@@ -260,7 +309,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
     grid-template-columns: minmax(154px, 1fr) 176px 77px 88px 70.5px;
     align-items: center;
     gap: 11px;
-    padding: 0 24px 0 33px;
+    padding: 0 14px 0 18px;
 }
 
 .gone {
@@ -339,17 +388,21 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
     opacity: 1;
 }
 
-.head,
-.player {
+.player-grid {
     display: grid;
     grid-template-columns: minmax(154px, 1fr) 44px 44px 57px 97px 57px 101px;
     align-items: center;
     gap: 11px;
-    padding: 0 24px 0 33px;
+    padding: 0 14px 0 18px;
 }
 
+/* The header row keeps the rows' 2px left edge, so its labels line up with their columns. */
 .head {
     height: 38px;
+    border-top: 1px solid var(--line-soft);
+    border-bottom: 1px solid var(--line-soft);
+    border-left: 2px solid transparent;
+    background: color-mix(in srgb, var(--raise) 55%, transparent);
     color: var(--faint);
     font-size: 12px;
     font-weight: 600;
@@ -373,7 +426,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
 }
 
 .rows-skeleton {
-    padding: 8px 24px 0 33px;
+    padding: 12px 14px 18px 20px;
 }
 
 .c-name {
@@ -451,10 +504,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
  * deaths and K/D, so the table never scrolls sideways.
  */
 @container page (max-width: 760px) {
-    .head,
-    .player {
+    .player-grid {
         grid-template-columns: minmax(120px, 1fr) 44px 44px 57px 57px 101px;
-        padding: 0 16px 0 22px;
+        padding: 0 12px 0 18px;
     }
 
     .c-cash {
@@ -463,13 +515,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
 
     .left-grid {
         grid-template-columns: minmax(120px, 1fr) 150px 70px 80px 70.5px;
-        padding: 0 16px 0 22px;
+        padding: 0 12px 0 18px;
     }
 }
 
 @container page (max-width: 560px) {
-    .head,
-    .player {
+    .player-grid {
         grid-template-columns: minmax(110px, 1fr) 44px 57px 101px;
         gap: 9px;
     }
@@ -491,11 +542,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
 
 /* Very narrow: tighter edges, and the row tools take only the room they need. */
 @container page (max-width: 460px) {
-    .head,
-    .player {
+    .player-grid {
         grid-template-columns: minmax(90px, 1fr) 30px 40px 90px;
         gap: 8px;
-        padding: 0 10px 0 16px;
+        padding: 0 8px 0 12px;
     }
 
     .c-name {
@@ -503,11 +553,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
     }
 
     .left-grid {
-        padding: 0 10px 0 16px;
+        padding: 0 8px 0 12px;
     }
 
     .rows-skeleton {
-        padding: 8px 10px 0 16px;
+        padding: 10px 8px 14px 14px;
     }
 }
 </style>

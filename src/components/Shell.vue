@@ -85,7 +85,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
 <template>
     <div class="shell">
         <IconRail />
-        <Sidebar />
+        <!-- Options are about the app, not a server: no server sidebar there. -->
+        <Sidebar v-if="state.view !== 'options'" />
 
         <template v-if="state.ready">
             <main v-if="showView" class="content" :class="{ wide }">

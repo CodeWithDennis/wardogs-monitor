@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { FlaskConical, Plus, SearchX } from 'lucide-vue-next';
+import { BadgeCheck, FlaskConical, Plus, SearchX, Server, Users } from 'lucide-vue-next';
 import { computed } from 'vue';
 import ServerCard from '@/components/ServerCard.vue';
 import SearchField from '@/components/SearchField.vue';
@@ -23,8 +23,11 @@ const servers = computed(() => {
 const players = computed(() => state.servers.reduce((sum, server) => sum + (state.lives[server.id]?.status?.players ?? 0), 0));
 const online = computed(() => state.servers.filter((server) => state.lives[server.id]?.online).length);
 
-/** "3 of 5 servers on your plan" while a limit applies (the demo server never counts). */
-const planUse = computed(() => (planLimit.value === null ? '' : ` · ${realServerCount.value} of ${planLimit.value} servers on your ${state.licence?.state === 'trial' ? 'trial' : 'plan'}`));
+/** "3 of 5" servers on the plan while a limit applies (the demo server never counts). */
+const planUse = computed(() => (planLimit.value === null ? null : { used: realServerCount.value, limit: planLimit.value, label: state.licence?.state === 'trial' ? 'On your trial' : 'On your plan' }));
+
+/** The add card ends the grid, unless a filter or search is narrowing it down. */
+const showAddCard = computed(() => state.serverFilter === 'all' && !state.search);
 
 async function addDemo(): Promise<void> {
     const server = await window.panel.servers.addDemo();
@@ -35,7 +38,7 @@ async function addDemo(): Promise<void> {
 </script>
 
 <template>
-    <ViewHeader title="Servers" :subtitle="`${online} of ${state.servers.length} online · ${players} players right now${planUse}`">
+    <ViewHeader title="Servers" subtitle="Every server you run, at a glance">
         <template #actions>
             <button type="button" class="btn btn-primary" @click="state.addingServer = true"><Plus /> Add server</button>
         </template>
@@ -45,11 +48,36 @@ async function addDemo(): Promise<void> {
         <SearchField placeholder="Search servers by name or address" :count="servers.length" />
     </div>
 
-    <div class="view-body">
-        <div class="grid">
+    <div class="view-body stack">
+        <!-- The totals across every server, a small card each -->
+        <div class="stats">
+            <div class="card stat">
+                <span class="panel-icon"><Server /></span>
+                <span class="stat-text">
+                    <span class="label-caps muted">Online</span>
+                    <strong class="num">{{ online }} <span class="of">of {{ state.servers.length }}</span></strong>
+                </span>
+            </div>
+            <div class="card stat">
+                <span class="panel-icon"><Users /></span>
+                <span class="stat-text">
+                    <span class="label-caps muted">Players right now</span>
+                    <strong class="num">{{ players }}</strong>
+                </span>
+            </div>
+            <div v-if="planUse" class="card stat">
+                <span class="panel-icon"><BadgeCheck /></span>
+                <span class="stat-text">
+                    <span class="label-caps muted">{{ planUse.label }}</span>
+                    <strong class="num">{{ planUse.used }} <span class="of">of {{ planUse.limit }} servers</span></strong>
+                </span>
+            </div>
+        </div>
+
+        <div v-if="servers.length > 0 || showAddCard" class="grid">
             <ServerCard v-for="server in servers" :key="server.id" :server="server" />
 
-            <button v-if="state.serverFilter === 'all' && !state.search" type="button" class="add-card" @click="state.addingServer = true">
+            <button v-if="showAddCard" type="button" class="add-card" @click="state.addingServer = true">
                 <span class="plus"><Plus /></span>
                 <strong>Add a server</strong>
                 <span class="muted">Its RCON address and password</span>
@@ -57,14 +85,63 @@ async function addDemo(): Promise<void> {
             </button>
         </div>
 
-        <div v-if="servers.length === 0 && (state.serverFilter !== 'all' || state.search)" class="empty">
-            <SearchX />
-            <span>No server matches. <button type="button" class="link" @click="state.search = ''; state.serverFilter = 'all'">Show all</button></span>
-        </div>
+        <section v-else class="card empty no-match">
+            <span class="panel-icon"><SearchX /></span>
+            <strong>No server matches</strong>
+            <span>Nothing fits {{ state.search ? 'that search' : 'this filter' }}. <button type="button" class="link" @click="state.search = ''; state.serverFilter = 'all'">Show all servers</button></span>
+        </section>
     </div>
 </template>
 
 <style scoped>
+.stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr));
+    gap: 14px;
+}
+
+.stat {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+    padding: 14px 18px;
+}
+
+.stat .panel-icon {
+    width: 36px;
+    height: 36px;
+}
+
+.stat .panel-icon svg {
+    width: 17px;
+    height: 17px;
+}
+
+.stat-text {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
+.stat-text .label-caps {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.stat strong {
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.stat .of {
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 400;
+}
+
 .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(330px, 100%), 1fr));
@@ -91,6 +168,12 @@ async function addDemo(): Promise<void> {
     background: color-mix(in srgb, var(--accent) 4%, transparent);
 }
 
+.add-card:focus-visible {
+    outline: none;
+    border-color: var(--accent-line);
+    box-shadow: 0 0 0 2px var(--accent-line);
+}
+
 .plus {
     display: grid;
     place-items: center;
@@ -100,6 +183,11 @@ async function addDemo(): Promise<void> {
     border-radius: 50%;
     background: var(--accent-soft);
     color: var(--accent);
+    transition: transform 0.15s;
+}
+
+.add-card:hover .plus {
+    transform: scale(1.06);
 }
 
 .plus svg {
@@ -137,10 +225,45 @@ async function addDemo(): Promise<void> {
     height: 14.5px;
 }
 
+/* Nothing matches: the same card finish as the rest, with the icon in its accent tile. */
+.no-match {
+    gap: 8px;
+    padding: 46px 22px;
+}
+
+.no-match .panel-icon {
+    width: 44px;
+    height: 44px;
+    margin-bottom: 6px;
+}
+
+.no-match .panel-icon svg {
+    width: 20px;
+    height: 20px;
+    color: inherit;
+}
+
+.no-match strong {
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 600;
+}
+
 .link {
     padding: 0;
     border: 0;
     background: transparent;
     color: var(--accent);
+}
+
+/* A narrow page: smaller gaps between the cards. */
+@container page (max-width: 760px) {
+    .stats {
+        gap: 10px;
+    }
+
+    .grid {
+        gap: 14px;
+    }
 }
 </style>

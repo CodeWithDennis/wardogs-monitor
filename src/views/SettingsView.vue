@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Eye, EyeOff, Lock } from 'lucide-vue-next';
-import { computed, onMounted, ref } from 'vue';
+import { Eye, EyeOff, KeyRound, Lock, Palette, Swords, Users } from 'lucide-vue-next';
+import { computed, nextTick, onMounted, ref } from 'vue';
 import SaveBar from '@/components/SaveBar.vue';
 import ViewHeader from '@/components/ViewHeader.vue';
 import { act, state, toast } from '@/lib/store';
@@ -12,14 +12,9 @@ import type { ServerSettings } from '@/types';
  * refuses a save when someone else changed the settings in the meantime.
  * Player slots apply after a restart; the rest from the next match.
  */
-const tab = ref('joining');
-const tabs = [
-    { id: 'joining', label: 'Joining' },
-    { id: 'players', label: 'Players' },
-    { id: 'match', label: 'Match' },
-    { id: 'branding', label: 'Branding' },
-];
+type Section = 'joining' | 'players' | 'match' | 'branding';
 
+const form = ref<HTMLFormElement | null>(null);
 const revision = ref<string | null>(null);
 const writable = ref(true);
 const error = ref<string | null>(null);
@@ -66,6 +61,18 @@ const dirty = computed(() => {
     return JSON.stringify({ ...draft.value, reserved_steam_ids: reservedIds.value }) !== JSON.stringify(saved.value);
 });
 
+/** How many fields in each card the server refused, shown in its header. */
+const errorCounts = computed(() => {
+    const counts: Partial<Record<Section, number>> = {};
+
+    for (const field of Object.keys(errors.value)) {
+        const section = sectionFor(field);
+        counts[section] = (counts[section] ?? 0) + 1;
+    }
+
+    return counts;
+});
+
 async function save(): Promise<void> {
     if (!draft.value || !revision.value) {
         return;
@@ -93,8 +100,8 @@ async function save(): Promise<void> {
             saveError.value = result.errors ? 'Some values need fixing.' : result.error;
 
             if (result.errors) {
-                const first = Object.keys(result.errors)[0];
-                tab.value = tabFor(first);
+                await nextTick();
+                form.value?.querySelector('[aria-invalid="true"]')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
             }
 
             if (result.configChanged) {
@@ -107,7 +114,7 @@ async function save(): Promise<void> {
     }
 }
 
-function tabFor(field: string): string {
+function sectionFor(field: string): Section {
     if (['server_password', 'max_reserved_slots', 'reserved_steam_ids'].includes(field)) {
         return 'joining';
     }
@@ -133,7 +140,7 @@ function int(field: keyof ServerSettings, event: Event): void {
 </script>
 
 <template>
-    <ViewHeader v-model:tab="tab" title="Server settings" subtitle="Saved into the server's config file" :tabs="tabs">
+    <ViewHeader title="Server settings" subtitle="Saved into the server's config file">
         <template v-if="!writable" #filters>
             <span class="pill pill-bad"><Lock :size="12" /> Read only</span>
         </template>
@@ -142,214 +149,266 @@ function int(field: keyof ServerSettings, event: Event): void {
     <div class="view-body narrow">
         <p v-if="error" class="muted">{{ error }}</p>
 
-        <form v-else-if="draft && limits" class="form" @submit.prevent="save">
-            <template v-if="tab === 'joining'">
-                <div class="group">
-                    <div class="group-text">
-                        <h3>Join password</h3>
-                        <p class="muted">Leave empty for an open server. Players type it when they join.</p>
-                    </div>
-                    <div class="field">
-                        <div class="with-button">
-                            <input v-model="draft.server_password" class="input" :type="showPassword ? 'text' : 'password'" :maxlength="limits.passwordMax" placeholder="Open server" autocomplete="off" :aria-invalid="!!errors.server_password" />
-                            <button type="button" class="btn btn-ghost" :title="showPassword ? 'Hide' : 'Show'" @click="showPassword = !showPassword"><component :is="showPassword ? EyeOff : Eye" /></button>
+        <template v-else-if="draft && limits">
+            <form ref="form" class="stack" @submit.prevent="save">
+                <section class="card panel">
+                    <header class="panel-head">
+                        <span class="panel-title"><span class="panel-icon"><KeyRound /></span> Joining</span>
+                        <span v-if="errorCounts.joining" class="panel-aside bad">{{ errorCounts.joining }} to fix</span>
+                        <span v-else class="panel-aside">{{ draft.server_password ? 'Password set' : 'Open server' }}</span>
+                    </header>
+                    <p class="panel-intro">Who can get in, and the spots held back for your regulars.</p>
+
+                    <div class="setting">
+                        <div class="setting-text">
+                            <label class="setting-name" for="setting-password">Join password</label>
+                            <p class="setting-hint">Leave empty for an open server. Players type it when they join.</p>
                         </div>
-                        <span v-if="errors.server_password" class="field-error">{{ errors.server_password }}</span>
-                    </div>
-                </div>
-
-                <div class="group">
-                    <div class="group-text">
-                        <h3>Reserved spots</h3>
-                        <p class="muted">Slots held back for the players below, so they can join a full server.</p>
-                    </div>
-                    <div class="field">
-                        <input :value="draft.max_reserved_slots" class="input num short" type="number" min="0" :max="draft.max_players" :aria-invalid="!!errors.max_reserved_slots" @input="int('max_reserved_slots', $event)" />
-                        <span v-if="errors.max_reserved_slots" class="field-error">{{ errors.max_reserved_slots }}</span>
-                    </div>
-                </div>
-
-                <div class="group">
-                    <div class="group-text">
-                        <h3>Reserved players</h3>
-                        <p class="muted">Steam IDs, one per line. Up to {{ limits.maxReservedIds }}.</p>
-                    </div>
-                    <div class="field">
-                        <textarea v-model="reservedText" class="textarea mono" rows="6" spellcheck="false" placeholder="76561198000000000" :aria-invalid="!!errors.reserved_steam_ids" />
-                        <span class="field-hint">{{ reservedIds.length }} {{ reservedIds.length === 1 ? 'player' : 'players' }}</span>
-                        <span v-if="errors.reserved_steam_ids" class="field-error">{{ errors.reserved_steam_ids }}</span>
-                    </div>
-                </div>
-            </template>
-
-            <template v-else-if="tab === 'players'">
-                <div class="group">
-                    <div class="group-text">
-                        <h3>Player slots</h3>
-                        <p class="muted">{{ limits.maxPlayersMin }} to {{ limits.maxPlayersMax }}. Applies after the server restarts from your host's panel.</p>
-                    </div>
-                    <div class="field">
-                        <div class="slider">
-                            <input :value="draft.max_players" type="range" :min="limits.maxPlayersMin" :max="limits.maxPlayersMax" step="2" @input="int('max_players', $event)" />
-                            <input :value="draft.max_players" class="input num short" type="number" :min="limits.maxPlayersMin" :max="limits.maxPlayersMax" :aria-invalid="!!errors.max_players" @input="int('max_players', $event)" />
+                        <div class="field">
+                            <div class="with-button">
+                                <input id="setting-password" v-model="draft.server_password" class="input" :type="showPassword ? 'text' : 'password'" :maxlength="limits.passwordMax" placeholder="Open server" autocomplete="off" :aria-invalid="!!errors.server_password" />
+                                <button type="button" class="btn btn-ghost" :title="showPassword ? 'Hide' : 'Show'" @click="showPassword = !showPassword"><component :is="showPassword ? EyeOff : Eye" /></button>
+                            </div>
+                            <span v-if="errors.server_password" class="field-error">{{ errors.server_password }}</span>
                         </div>
-                        <span v-if="errors.max_players" class="field-error">{{ errors.max_players }}</span>
                     </div>
-                </div>
 
-                <div class="group">
-                    <div class="group-text">
-                        <h3>Level limits</h3>
-                        <p class="muted">Only players in this level range can join. 0 means no limit.</p>
-                    </div>
-                    <div class="pair">
-                        <label class="field">
-                            <span class="field-label">Minimum</span>
-                            <input :value="draft.min_level" class="input num" type="number" min="0" :max="limits.levelMax" :aria-invalid="!!errors.min_level" @input="int('min_level', $event)" />
-                        </label>
-                        <label class="field">
-                            <span class="field-label">Maximum</span>
-                            <input :value="draft.max_level" class="input num" type="number" min="0" :max="limits.levelMax" :aria-invalid="!!errors.max_level" @input="int('max_level', $event)" />
-                        </label>
-                        <span v-if="errors.min_level || errors.max_level" class="field-error span">{{ errors.min_level || errors.max_level }}</span>
-                    </div>
-                </div>
-
-                <div class="group">
-                    <div class="group-text">
-                        <h3>Cash limits</h3>
-                        <p class="muted">Only players with this much cash can join. 0 means no limit.</p>
-                    </div>
-                    <div class="pair">
-                        <label class="field">
-                            <span class="field-label">Minimum</span>
-                            <input :value="draft.min_cash" class="input num" type="number" min="0" :max="limits.cashMax" :aria-invalid="!!errors.min_cash" @input="int('min_cash', $event)" />
-                        </label>
-                        <label class="field">
-                            <span class="field-label">Maximum</span>
-                            <input :value="draft.max_cash" class="input num" type="number" min="0" :max="limits.cashMax" :aria-invalid="!!errors.max_cash" @input="int('max_cash', $event)" />
-                        </label>
-                        <span v-if="errors.min_cash || errors.max_cash" class="field-error span">{{ errors.min_cash || errors.max_cash }}</span>
-                    </div>
-                </div>
-            </template>
-
-            <template v-else-if="tab === 'match'">
-                <div class="group">
-                    <div class="group-text">
-                        <h3>Players needed to start</h3>
-                        <p class="muted">The match waits until this many players have joined.</p>
-                    </div>
-                    <div class="field">
-                        <input :value="draft.min_players_to_start" class="input num short" type="number" min="0" :max="limits.maxPlayersMax" :aria-invalid="!!errors.min_players_to_start" @input="int('min_players_to_start', $event)" />
-                        <span v-if="errors.min_players_to_start" class="field-error">{{ errors.min_players_to_start }}</span>
-                    </div>
-                </div>
-
-                <div class="group">
-                    <div class="group-text">
-                        <h3>Score period</h3>
-                        <p class="muted">Seconds between points for holding the hill, {{ limits.scorePeriodMin }} to {{ limits.scorePeriodMax }}. Lower is a faster match.</p>
-                    </div>
-                    <div class="field">
-                        <div class="slider">
-                            <input :value="draft.score_period" type="range" :min="limits.scorePeriodMin" :max="limits.scorePeriodMax" @input="int('score_period', $event)" />
-                            <input :value="draft.score_period" class="input num short" type="number" :min="limits.scorePeriodMin" :max="limits.scorePeriodMax" :aria-invalid="!!errors.score_period" @input="int('score_period', $event)" />
+                    <div class="setting">
+                        <div class="setting-text">
+                            <label class="setting-name" for="setting-reserved-slots">Reserved spots</label>
+                            <p class="setting-hint">Slots held back for the players below, so they can join a full server.</p>
                         </div>
-                        <span v-if="errors.score_period" class="field-error">{{ errors.score_period }}</span>
-                    </div>
-                </div>
-
-                <div class="group">
-                    <div class="group-text">
-                        <h3>Team balance</h3>
-                        <p class="muted">Lock a team to new players while it is ahead by more than this many players.</p>
-                    </div>
-                    <div class="field">
-                        <label class="switch">
-                            <button type="button" role="switch" class="toggle" :aria-checked="draft.lock_overpopulated_teams" @click="draft.lock_overpopulated_teams = !draft.lock_overpopulated_teams" />
-                            <span>{{ draft.lock_overpopulated_teams ? 'Lock bigger teams' : 'Anyone can join any team' }}</span>
-                        </label>
-                        <div v-if="draft.lock_overpopulated_teams" class="lead">
-                            <span class="muted">Allowed lead</span>
-                            <input :value="draft.overpopulated_team_threshold" class="input num short" type="number" min="0" :max="limits.teamLeadMax" :aria-invalid="!!errors.overpopulated_team_threshold" @input="int('overpopulated_team_threshold', $event)" />
-                            <span class="muted">players</span>
+                        <div class="field">
+                            <input id="setting-reserved-slots" :value="draft.max_reserved_slots" class="input num short" type="number" min="0" :max="draft.max_players" :aria-invalid="!!errors.max_reserved_slots" @input="int('max_reserved_slots', $event)" />
+                            <span v-if="errors.max_reserved_slots" class="field-error">{{ errors.max_reserved_slots }}</span>
                         </div>
-                        <span v-if="errors.overpopulated_team_threshold" class="field-error">{{ errors.overpopulated_team_threshold }}</span>
                     </div>
-                </div>
-            </template>
 
-            <template v-else>
-                <div class="group">
-                    <div class="group-text">
-                        <h3>Server name</h3>
-                        <p class="muted">{{ draft.server_name_locked ? 'Pinned by your host. Change it in their panel.' : 'Shown in the server browser.' }}</p>
-                    </div>
-                    <div class="field">
-                        <div class="with-button">
-                            <input v-model="draft.server_name" class="input" maxlength="100" :disabled="draft.server_name_locked" :aria-invalid="!!errors.server_name" />
-                            <Lock v-if="draft.server_name_locked" class="lock" />
+                    <div class="setting">
+                        <div class="setting-text">
+                            <label class="setting-name" for="setting-reserved-ids">Reserved players</label>
+                            <p class="setting-hint">Steam IDs, one per line. Up to {{ limits.maxReservedIds }}.</p>
                         </div>
-                        <span v-if="errors.server_name" class="field-error">{{ errors.server_name }}</span>
+                        <div class="field">
+                            <textarea id="setting-reserved-ids" v-model="reservedText" class="textarea mono" rows="6" spellcheck="false" placeholder="76561198000000000" :aria-invalid="!!errors.reserved_steam_ids" />
+                            <span class="field-hint">{{ reservedIds.length }} {{ reservedIds.length === 1 ? 'player' : 'players' }}</span>
+                            <span v-if="errors.reserved_steam_ids" class="field-error">{{ errors.reserved_steam_ids }}</span>
+                        </div>
                     </div>
-                </div>
+                </section>
 
-                <div class="group">
-                    <div class="group-text">
-                        <h3>Banner</h3>
-                        <p class="muted">An https:// image link shown in the server browser.</p>
+                <section class="card panel">
+                    <header class="panel-head">
+                        <span class="panel-title"><span class="panel-icon"><Users /></span> Players</span>
+                        <span v-if="errorCounts.players" class="panel-aside bad">{{ errorCounts.players }} to fix</span>
+                        <span v-else class="panel-aside">{{ draft.max_players }} slots</span>
+                    </header>
+                    <p class="panel-intro">How many players fit, and who is allowed to join.</p>
+
+                    <div class="setting">
+                        <div class="setting-text">
+                            <label class="setting-name" for="setting-max-players">Player slots</label>
+                            <p class="setting-hint">{{ limits.maxPlayersMin }} to {{ limits.maxPlayersMax }}. Applies after the server restarts from your host's panel.</p>
+                        </div>
+                        <div class="field">
+                            <div class="slider">
+                                <input :value="draft.max_players" type="range" :min="limits.maxPlayersMin" :max="limits.maxPlayersMax" step="2" aria-label="Player slots" @input="int('max_players', $event)" />
+                                <input id="setting-max-players" :value="draft.max_players" class="input num short" type="number" :min="limits.maxPlayersMin" :max="limits.maxPlayersMax" :aria-invalid="!!errors.max_players" @input="int('max_players', $event)" />
+                            </div>
+                            <span v-if="errors.max_players" class="field-error">{{ errors.max_players }}</span>
+                        </div>
                     </div>
-                    <div class="field">
-                        <input v-model="draft.image_url" class="input" placeholder="https://…" spellcheck="false" :aria-invalid="!!errors.image_url" />
-                        <span v-if="errors.image_url" class="field-error">{{ errors.image_url }}</span>
-                        <img v-if="draft.image_url.startsWith('https://')" :src="draft.image_url" alt="Banner preview" class="banner" @error="($event.target as HTMLImageElement).style.display = 'none'" @load="($event.target as HTMLImageElement).style.display = ''" />
+
+                    <div class="setting">
+                        <div class="setting-text">
+                            <span class="setting-name">Level limits</span>
+                            <p class="setting-hint">Only players in this level range can join. 0 means no limit.</p>
+                        </div>
+                        <div class="pair">
+                            <label class="field">
+                                <span class="field-label">Minimum</span>
+                                <input :value="draft.min_level" class="input num" type="number" min="0" :max="limits.levelMax" :aria-invalid="!!errors.min_level" @input="int('min_level', $event)" />
+                            </label>
+                            <label class="field">
+                                <span class="field-label">Maximum</span>
+                                <input :value="draft.max_level" class="input num" type="number" min="0" :max="limits.levelMax" :aria-invalid="!!errors.max_level" @input="int('max_level', $event)" />
+                            </label>
+                            <span v-if="errors.min_level || errors.max_level" class="field-error span">{{ errors.min_level || errors.max_level }}</span>
+                        </div>
                     </div>
-                </div>
-            </template>
+
+                    <div class="setting">
+                        <div class="setting-text">
+                            <span class="setting-name">Cash limits</span>
+                            <p class="setting-hint">Only players with this much cash can join. 0 means no limit.</p>
+                        </div>
+                        <div class="pair">
+                            <label class="field">
+                                <span class="field-label">Minimum</span>
+                                <input :value="draft.min_cash" class="input num" type="number" min="0" :max="limits.cashMax" :aria-invalid="!!errors.min_cash" @input="int('min_cash', $event)" />
+                            </label>
+                            <label class="field">
+                                <span class="field-label">Maximum</span>
+                                <input :value="draft.max_cash" class="input num" type="number" min="0" :max="limits.cashMax" :aria-invalid="!!errors.max_cash" @input="int('max_cash', $event)" />
+                            </label>
+                            <span v-if="errors.min_cash || errors.max_cash" class="field-error span">{{ errors.min_cash || errors.max_cash }}</span>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="card panel">
+                    <header class="panel-head">
+                        <span class="panel-title"><span class="panel-icon"><Swords /></span> Match</span>
+                        <span v-if="errorCounts.match" class="panel-aside bad">{{ errorCounts.match }} to fix</span>
+                        <span v-else class="panel-aside">From the next match</span>
+                    </header>
+                    <p class="panel-intro">When a match starts, how fast it plays and how teams stay even.</p>
+
+                    <div class="setting">
+                        <div class="setting-text">
+                            <label class="setting-name" for="setting-min-players">Players needed to start</label>
+                            <p class="setting-hint">The match waits until this many players have joined.</p>
+                        </div>
+                        <div class="field">
+                            <input id="setting-min-players" :value="draft.min_players_to_start" class="input num short" type="number" min="0" :max="limits.maxPlayersMax" :aria-invalid="!!errors.min_players_to_start" @input="int('min_players_to_start', $event)" />
+                            <span v-if="errors.min_players_to_start" class="field-error">{{ errors.min_players_to_start }}</span>
+                        </div>
+                    </div>
+
+                    <div class="setting">
+                        <div class="setting-text">
+                            <label class="setting-name" for="setting-score-period">Score period</label>
+                            <p class="setting-hint">Seconds between points for holding the hill, {{ limits.scorePeriodMin }} to {{ limits.scorePeriodMax }}. Lower is a faster match.</p>
+                        </div>
+                        <div class="field">
+                            <div class="slider">
+                                <input :value="draft.score_period" type="range" :min="limits.scorePeriodMin" :max="limits.scorePeriodMax" aria-label="Score period" @input="int('score_period', $event)" />
+                                <input id="setting-score-period" :value="draft.score_period" class="input num short" type="number" :min="limits.scorePeriodMin" :max="limits.scorePeriodMax" :aria-invalid="!!errors.score_period" @input="int('score_period', $event)" />
+                            </div>
+                            <span v-if="errors.score_period" class="field-error">{{ errors.score_period }}</span>
+                        </div>
+                    </div>
+
+                    <div class="setting">
+                        <div class="setting-text">
+                            <span class="setting-name">Team balance</span>
+                            <p class="setting-hint">Lock a team to new players while it is ahead by more than this many players.</p>
+                        </div>
+                        <div class="field">
+                            <label class="switch">
+                                <button type="button" role="switch" class="toggle" :aria-checked="draft.lock_overpopulated_teams" @click="draft.lock_overpopulated_teams = !draft.lock_overpopulated_teams" />
+                                <span>{{ draft.lock_overpopulated_teams ? 'Lock bigger teams' : 'Anyone can join any team' }}</span>
+                            </label>
+                            <div v-if="draft.lock_overpopulated_teams" class="lead">
+                                <span class="muted">Allowed lead</span>
+                                <input :value="draft.overpopulated_team_threshold" class="input num short" type="number" min="0" :max="limits.teamLeadMax" aria-label="Allowed lead in players" :aria-invalid="!!errors.overpopulated_team_threshold" @input="int('overpopulated_team_threshold', $event)" />
+                                <span class="muted">players</span>
+                            </div>
+                            <span v-if="errors.overpopulated_team_threshold" class="field-error">{{ errors.overpopulated_team_threshold }}</span>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="card panel">
+                    <header class="panel-head">
+                        <span class="panel-title"><span class="panel-icon"><Palette /></span> Branding</span>
+                        <span v-if="errorCounts.branding" class="panel-aside bad">{{ errorCounts.branding }} to fix</span>
+                    </header>
+                    <p class="panel-intro">How the server shows up in the server browser.</p>
+
+                    <div class="setting">
+                        <div class="setting-text">
+                            <label class="setting-name" for="setting-name">Server name</label>
+                            <p class="setting-hint">{{ draft.server_name_locked ? 'Pinned by your host. Change it in their panel.' : 'Shown in the server browser.' }}</p>
+                        </div>
+                        <div class="field">
+                            <div class="with-button">
+                                <input id="setting-name" v-model="draft.server_name" class="input" maxlength="100" :disabled="draft.server_name_locked" :aria-invalid="!!errors.server_name" />
+                                <Lock v-if="draft.server_name_locked" class="lock" />
+                            </div>
+                            <span v-if="errors.server_name" class="field-error">{{ errors.server_name }}</span>
+                        </div>
+                    </div>
+
+                    <div class="setting">
+                        <div class="setting-text">
+                            <label class="setting-name" for="setting-banner">Banner</label>
+                            <p class="setting-hint">An https:// image link shown in the server browser.</p>
+                        </div>
+                        <div class="field">
+                            <input id="setting-banner" v-model="draft.image_url" class="input" placeholder="https://…" spellcheck="false" :aria-invalid="!!errors.image_url" />
+                            <span v-if="errors.image_url" class="field-error">{{ errors.image_url }}</span>
+                            <img v-if="draft.image_url.startsWith('https://')" :src="draft.image_url" alt="Banner preview" class="banner" @error="($event.target as HTMLImageElement).style.display = 'none'" @load="($event.target as HTMLImageElement).style.display = ''" />
+                        </div>
+                    </div>
+                </section>
+            </form>
 
             <SaveBar :show="dirty || !!saveError" :saving="saving" :error="saveError" @save="save" @discard="load" />
-        </form>
+        </template>
 
-        <div v-else class="form" aria-busy="true" aria-label="Loading the settings">
-            <div v-for="i in 4" :key="i" class="group">
-                <div>
-                    <div class="skeleton" style="height: 15px" :style="{ width: `${45 + ((i * 13) % 30)}%` }" />
-                    <div class="skeleton" style="height: 11px; width: 85%; margin-top: 9px" />
+        <div v-else class="stack" aria-busy="true" aria-label="Loading the settings">
+            <section v-for="card in 3" :key="card" class="card panel">
+                <header class="panel-head">
+                    <span class="panel-title">
+                        <span class="skeleton" style="width: 28px; height: 28px" />
+                        <span class="skeleton" style="height: 14px" :style="{ width: `${70 + ((card * 23) % 40)}px` }" />
+                    </span>
+                </header>
+                <div v-for="row in 3 - (card % 2)" :key="row" class="setting">
+                    <div>
+                        <div class="skeleton" style="height: 14px" :style="{ width: `${40 + (((card + row) * 13) % 30)}%` }" />
+                        <div class="skeleton" style="height: 11px; width: 85%; margin-top: 9px" />
+                    </div>
+                    <div class="skeleton" style="height: 36px" />
                 </div>
-                <div class="skeleton" style="height: 39px" />
-            </div>
+            </section>
         </div>
     </div>
 </template>
 
 <style scoped>
-.form {
+/*
+ * One setting in a card: its name and explanation on the left, its fields
+ * on the right, with a soft line between settings.
+ */
+.setting {
     display: grid;
+    grid-template-columns: minmax(180px, 1fr) minmax(0, 1.3fr);
+    gap: 28px;
+    padding: 16px 0;
 }
 
-.group {
-    display: grid;
-    grid-template-columns: minmax(198px, 308px) minmax(0, 1fr);
-    gap: 31px;
-    padding: 22px 0;
-    border-bottom: 1px solid var(--line-soft);
+.setting + .setting {
+    border-top: 1px solid var(--line-soft);
 }
 
-.group:first-child {
-    padding-top: 4.5px;
+.panel-head + .setting,
+.panel-intro + .setting {
+    padding-top: 4px;
 }
 
-.group h3 {
-    margin: 0;
-    font-size: 15.5px;
+.setting:last-child {
+    padding-bottom: 2px;
+}
+
+.setting-name {
+    display: block;
+    color: var(--text);
+    font-size: 14.5px;
     font-weight: 500;
 }
 
-.group p {
-    margin: 4.5px 0 0;
-    font-size: 14px;
-    line-height: 1.55;
+.setting-hint {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 13.5px;
+    line-height: 1.5;
+}
+
+.panel-aside.bad {
+    color: var(--bad);
+    font-weight: 500;
 }
 
 .short {
@@ -396,6 +455,7 @@ function int(field: keyof ServerSettings, event: Event): void {
 
 .slider input[type='range'] {
     flex: 1;
+    min-width: 0;
     accent-color: var(--accent);
 }
 
@@ -403,7 +463,7 @@ function int(field: keyof ServerSettings, event: Event): void {
     display: flex;
     align-items: center;
     gap: 13px;
-    min-height: 37.5px;
+    min-height: 36px;
 }
 
 .lead {
@@ -424,10 +484,10 @@ function int(field: keyof ServerSettings, event: Event): void {
 }
 
 /* A narrow page: each setting's explanation sits above its fields. */
-@container page (max-width: 720px) {
-    .group {
+@container page (max-width: 760px) {
+    .setting {
         grid-template-columns: minmax(0, 1fr);
-        gap: 13px;
+        gap: 12px;
     }
 }
 
