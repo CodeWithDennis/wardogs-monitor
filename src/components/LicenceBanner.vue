@@ -15,9 +15,12 @@ const show = computed(() => hasRealServers.value && state.view !== 'options' && 
     <div v-if="show && state.licence" class="banner" :class="state.licence.state">
         <component :is="state.licence.state === 'expired' ? Lock : Clock" class="icon" />
         <span v-if="state.licence.state === 'expired' && state.licence.reason === 'offline'">Your licence could not be confirmed online for too long. Your servers are locked until this PC can reach the website.</span>
+        <span v-else-if="state.licence.state === 'expired' && state.licence.reason === 'unconfirmed'">Your licence is not confirmed for this PC yet. Connect to the internet so it can be activated.</span>
+        <span v-else-if="state.licence.state === 'expired' && state.licence.reason === 'trial-unconfirmed'">Connect to the internet once to start your free trial. The demo server works without it.</span>
+        <span v-else-if="state.licence.state === 'expired' && state.licence.reason === 'clock'">This PC's clock is set earlier than it should be. Set the date and time right, or connect to the internet.</span>
         <span v-else-if="state.licence.state === 'expired'">{{ state.licence.reason === 'licence' ? 'Your licence has ended.' : state.licence.reason === 'revoked' ? 'Your licence was revoked.' : 'Your free trial has ended.' }} Your servers are locked until you activate a licence.</span>
         <span v-else>Your free trial ends in {{ state.licence.trialDaysLeft }} {{ state.licence.trialDaysLeft === 1 ? 'day' : 'days' }}.</span>
-        <button type="button" class="btn btn-primary btn-sm" @click="openOptions('licence')">{{ state.licence.reason === 'offline' || state.licence.reason === 'licence' ? 'Open licence' : 'Activate licence' }}</button>
+        <button type="button" class="btn btn-primary btn-sm" @click="openOptions('licence')">{{ state.licence.reason === 'trial' || state.licence.reason === 'revoked' ? 'Activate licence' : 'Open licence' }}</button>
     </div>
 </template>
 

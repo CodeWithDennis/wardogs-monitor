@@ -3,7 +3,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { createServer } from 'node:http';
 import { after, before, beforeEach, test } from 'node:test';
 import { issueKey, readKey, signPayload } from '../electron/license-core.mjs';
-import { activateOnline, deactivateOnline, hashDevice, statusFor, validateOnline } from '../electron/license-online.mjs';
+import { activateOnline, deactivateOnline, hashDevice, startTrialOnline, statusFor, validateOnline } from '../electron/license-online.mjs';
 
 /**
  * The online licence check against a tiny stand-in for the website's
@@ -108,13 +108,21 @@ test('a clear refusal stops the activation with the website\'s reason', async ()
     assert.match(result.error, /maximum number of PCs/);
 });
 
-test('when the website cannot be reached, the key is activated offline and not yet confirmed', async () => {
+test('activating needs the website: without an answer the key is not activated', async () => {
     const result = await activateOnline(keyFor(), ctx({ api: await deadApi() }));
 
-    assert.equal(result.ok, true);
-    assert.equal(result.record.onlineConfirmed, false);
-    assert.equal(statusOf(result.record).state, 'licensed');
-    assert.equal(statusOf(result.record).onlineConfirmed, false);
+    assert.equal(result.ok, false);
+    assert.equal(result.code, 'unreachable');
+    assert.match(result.error, /activated online once/);
+});
+
+test('an answer whose token is for another PC activates nothing', async () => {
+    const key = keyFor();
+    answer = () => active(key, { token: token(key, '2026-10-24T12:00:00Z', 'another-pc') });
+
+    const result = await activateOnline(key, ctx());
+
+    assert.equal(result.ok, false);
 });
 
 test('a check swaps in the renewed key, which can raise the server limit', async () => {
@@ -159,7 +167,8 @@ test('an expired answer keeps the key, so the status follows its own expiry', as
 
     assert.equal(result.record.key, key);
     assert.equal(result.record.token, null);
-    assert.equal(statusOf(result.record).state, 'licensed');
+    // Without the website's confirmation the key doesn't run, and after its own expiry it has ended.
+    assert.deepEqual([statusOf(result.record).state, statusOf(result.record).reason], ['expired', 'unconfirmed']);
     assert.equal(statusOf(result.record, new Date('2026-11-15T00:00:00Z')).reason, 'licence');
 });
 
@@ -184,7 +193,7 @@ test('unreachable with a token that is still valid: keeps working', async () => 
     assert.equal(statusOf(result.record).state, 'licensed');
 });
 
-test('unreachable after the token ran out: locks until the website answers again', async () => {
+test('the token ran out: locks until the website answers again, failed check or not', async () => {
     const key = keyFor();
     answer = () => ({ status: 503, json: {} });
 
@@ -193,15 +202,64 @@ test('unreachable after the token ran out: locks until the website answers again
 
     assert.deepEqual([status.state, status.reason, status.maxServers], ['expired', 'offline', 0]);
 
-    // The token ran out but nothing has tried since: not locked yet.
-    assert.equal(statusOf({ key, activatedAt: NOW.toISOString(), token: token(key, '2026-10-16T00:00:00Z') }).state, 'licensed');
+    // No failed check recorded (say, the file was edited): the signed date alone decides.
+    assert.equal(statusOf({ key, activatedAt: NOW.toISOString(), token: token(key, '2026-10-16T00:00:00Z') }).reason, 'offline');
 });
 
-test('a token for another PC is ignored; the key alone counts', async () => {
+test('a key never confirmed for this PC does not run: no token, or another PC\'s token', async () => {
     const key = keyFor();
-    const record = { key, activatedAt: NOW.toISOString(), token: token(key, '2026-10-01T00:00:00Z', 'another-pc'), lastFailedAt: NOW.toISOString() };
 
-    assert.equal(statusOf(record).state, 'licensed');
+    assert.equal(statusOf({ key, activatedAt: NOW.toISOString() }).reason, 'unconfirmed');
+    assert.equal(statusOf({ key, activatedAt: NOW.toISOString(), token: token(key, '2026-10-24T12:00:00Z', 'another-pc') }).reason, 'unconfirmed');
+    // A copied licence file on another PC is the same case: the token names the PC it was signed for.
+    assert.equal(statusFor({ saved: { key, token: token(key) }, trialDays: 14, ctx: ctx({ deviceId: 'another-pc' }), now: NOW }).reason, 'unconfirmed');
+});
+
+test('only a test run without a website may run a key unconfirmed', () => {
+    const key = keyFor();
+
+    assert.equal(statusFor({ saved: { key }, trialDays: 14, ctx: ctx({ allowUnconfirmed: true }), now: NOW }).state, 'licensed');
+});
+
+test('a clock turned back locks: behind the website\'s time, or behind the latest time seen', () => {
+    const key = keyFor();
+    const record = { key, token: token(key) };
+
+    // The token was signed at 2026-10-17T12:00Z.
+    assert.equal(statusOf(record, new Date('2026-10-17T11:00:00Z')).reason, 'clock');
+    assert.equal(statusOf(record, new Date('2026-10-17T11:55:00Z')).state, 'licensed');
+    assert.equal(statusFor({ saved: record, trialDays: 14, ctx: ctx(), now: new Date('2026-10-18T00:00:00Z'), latestSeen: Date.parse('2026-10-22T00:00:00Z') }).reason, 'clock');
+    assert.equal(statusFor({ saved: record, trialDays: 14, ctx: ctx(), now: new Date('2026-10-22T00:30:00Z'), latestSeen: Date.parse('2026-10-22T01:00:00Z') }).state, 'licensed');
+});
+
+const trialToken = (device = DEVICE, ends = '2026-10-31T12:00:00Z') =>
+    signPayload({ v: 1, kind: 'trial', device: hashDevice(device), started: '2026-10-17T12:00:00Z', ends, checked: '2026-10-17T12:00:00Z' }, privatePem, 'TESTS');
+
+test('the trial counts from the website\'s signed dates, not from anything on this PC', () => {
+    const trial = (token, now = NOW, extra = {}) => statusFor({ saved: null, trialToken: token, trialStartedAt: '2020-01-01T00:00:00Z', trialDays: 14, ctx: ctx(extra), now });
+
+    assert.deepEqual([trial(trialToken()).state, trial(trialToken()).trialDaysLeft], ['trial', 14]);
+    assert.equal(trial(trialToken(), new Date('2026-11-01T00:00:00Z')).reason, 'trial');
+    assert.equal(trial(null).reason, 'trial-unconfirmed');
+    assert.equal(trial(trialToken('another-pc')).reason, 'trial-unconfirmed');
+    assert.equal(trial(trialToken(), new Date('2026-10-17T10:00:00Z')).reason, 'clock');
+    // A licence status token is no trial token.
+    assert.equal(trial(token(keyFor())).reason, 'trial-unconfirmed');
+    // Test runs without a website keep a local trial.
+    assert.equal(statusFor({ saved: null, trialStartedAt: '2026-10-10T12:00:00Z', trialDays: 14, ctx: ctx({ allowUnconfirmed: true }), now: NOW }).trialDaysLeft, 7);
+});
+
+test('starting the trial sends only the device ID and keeps a genuine token for this PC', async () => {
+    answer = (path) => (path.endsWith('/trials/start') ? { status: 200, json: { status: 'trial', token: trialToken() } } : { status: 404, json: {} });
+
+    const result = await startTrialOnline(ctx());
+
+    assert.deepEqual(result, { ok: true, token: trialToken() });
+    assert.deepEqual(requests.map((request) => [request.path, request.body]), [['/api/v1/trials/start', { device_id: DEVICE }]]);
+
+    answer = () => ({ status: 200, json: { status: 'trial', token: trialToken('another-pc') } });
+    assert.equal((await startTrialOnline(ctx())).ok, false);
+    assert.equal((await startTrialOnline(ctx({ api: await deadApi() }))).ok, false);
 });
 
 test('deactivating frees the seat, best effort', async () => {
