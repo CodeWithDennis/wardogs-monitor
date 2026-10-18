@@ -2,7 +2,7 @@ name: Build
 
 # Every push and pull request: typecheck, test, and build the Windows
 # installer and portable exe (downloadable from the run's artifacts).
-# Pushing a tag like v0.2.0 also publishes them as a GitHub release.
+# Pushing a tag like v0.0.1 (matching package.json) also publishes them as a GitHub release.
 
 on:
   push:
@@ -38,6 +38,17 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # A release tag must match the version in package.json, which the app and installer show.
+      - name: Check the tag matches the app version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          expected="v$(node -p "require('./package.json').version")"
+          if [ "$GITHUB_REF_NAME" != "$expected" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json ($expected)."
+            exit 1
+          fi
 
       - name: Typecheck
         run: npm run typecheck
