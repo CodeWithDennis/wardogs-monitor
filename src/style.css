@@ -984,10 +984,6 @@ a {
     padding: 26.5px 35px 39.5px;
 }
 
-.view-body.narrow > * {
-    max-width: 946px;
-}
-
 /*
  * Pages fit the width they are given, not the window's: the sidebar and the
  * detail panel take their share first. Every page queries this container
