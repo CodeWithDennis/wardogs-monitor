@@ -282,7 +282,13 @@ export interface LicenceSubscription {
 export interface LicenceStatus {
     state: 'licensed' | 'trial' | 'expired';
     /** Why it is locked: the trial or licence ended, the website revoked it, or it could not be checked online for too long. */
-    reason?: 'trial' | 'licence' | 'revoked' | 'offline';
+    /**
+     * Why it is locked: the trial or licence ended, the licence was revoked,
+     * the website's confirmation ran out (offline), the licence was never
+     * confirmed for this PC, the trial was never started online, or the
+     * PC's clock was turned back.
+     */
+    reason?: 'trial' | 'licence' | 'revoked' | 'offline' | 'unconfirmed' | 'trial-unconfirmed' | 'clock';
     licensee: string | null;
     email: string | null;
     plan: string | null;

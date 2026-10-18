@@ -1,64 +1,130 @@
-import { app, net } from 'electron';
-import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { app, net, safeStorage } from 'electron';
+import { execFile } from 'node:child_process';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import brand from '../brand.json' with { type: 'json' };
-import { readKey } from './license-core.mjs';
-import { activateOnline, deactivateOnline, statusFor, validateOnline } from './license-online.mjs';
+import { readKey, readStatusToken, readTrialToken } from './license-core.mjs';
+import { activateOnline, deactivateOnline, startTrialOnline, statusFor, validateOnline } from './license-online.mjs';
 import { PUBLIC_KEY } from './license-public-key.mjs';
 
 /**
- * The licence on this PC: the activated key and what the website last said
- * about it in license.json, the date the free trial started in trial.json
- * (written on the first start), and a random ID for this PC in device.json
- * (not a hardware fingerprint; the website counts seats by it). The demo
- * server always works; real servers need the trial or a licence, up to the
- * plan's number of servers.
+ * The licence on this PC, kept in licence.dat, encrypted with Windows DPAPI
+ * (Electron's safeStorage) so it can't be read or edited by hand, nor copied
+ * to another PC or Windows account: the activated key with what the website
+ * last signed about it, the website's signed trial dates, and the latest
+ * time this app has seen (a clock turned back past it locks the app until
+ * the website confirms again). The website is the source of truth for both
+ * the licence and the trial (see license-online.mjs).
+ *
+ * This PC's ID comes from Windows' own machine ID, hashed with the app's
+ * name, so seats follow the PC and not a file that could be copied along.
+ *
+ * Test runs (an app started from the source, never a packaged one) may
+ * point at another website with PANEL_LICENSE_API, or work without one.
  */
 
+const execFileAsync = promisify(execFile);
+const development = !app.isPackaged;
 const file = (name) => path.join(app.getPath('userData'), name);
+const STATE = 'licence.dat';
 
-async function readJson(name) {
+/** The latest time seen is written at most this often; it is kept in memory between. */
+const SEEN_EVERY_MS = 10 * 60 * 1000;
+
+/**
+ * @typedef {{
+ *   record?: (import('./license-online.mjs').LicenceRecord & { revoked?: boolean }) | { revoked: true, revokedAt: string } | null,
+ *   trialToken?: string | null,
+ *   latestSeen?: number | null,
+ *   localTrialStartedAt?: string | null,
+ *   fallbackDeviceId?: string | null,
+ * }} LicenceState
+ */
+
+/** @type {Promise<LicenceState> | null} */
+let stateOnce = null;
+let seenWrittenAt = 0;
+
+/** What licence.dat holds; nothing (a fresh start) when it is missing, from another PC, or tampered with. */
+async function readState() {
     try {
-        return JSON.parse(await readFile(file(name), 'utf8'));
+        return JSON.parse(safeStorage.decryptString(await readFile(file(STATE))));
+    } catch {
+        return migrateOldFiles();
+    }
+}
+
+/**
+ * Builds before licence.dat kept the key in plain license.json: carry the
+ * key over (it must be confirmed online again) and drop the old files.
+ */
+async function migrateOldFiles() {
+    let key = null;
+
+    try {
+        key = JSON.parse(await readFile(file('license.json'), 'utf8'))?.key ?? null;
+    } catch {
+        // Nothing to carry over.
+    }
+
+    await Promise.all(['license.json', 'trial.json', 'device.json'].map((name) => rm(file(name), { force: true })));
+
+    return typeof key === 'string' && key ? { record: { key, activatedAt: new Date().toISOString() } } : {};
+}
+
+function state() {
+    stateOnce ??= readState();
+
+    return stateOnce;
+}
+
+/** @param {(current: LicenceState) => LicenceState} change */
+async function saveState(change) {
+    const next = change(await state());
+    stateOnce = Promise.resolve(next);
+    await mkdir(app.getPath('userData'), { recursive: true });
+    const temporary = `${file(STATE)}.${randomUUID()}.tmp`;
+    await writeFile(temporary, safeStorage.encryptString(JSON.stringify(next)));
+    await rename(temporary, file(STATE));
+    seenWrittenAt = Date.now();
+
+    return next;
+}
+
+/** Windows' machine ID (set when Windows is installed), or null if it can't be read. */
+async function machineGuid() {
+    try {
+        const { stdout } = await execFileAsync('reg', ['query', 'HKLM\\SOFTWARE\\Microsoft\\Cryptography', '/v', 'MachineGuid', '/reg:64'], { windowsHide: true, timeout: 5000 });
+
+        return stdout.match(/MachineGuid\s+REG_SZ\s+([0-9a-fA-F-]{36})/)?.[1]?.toLowerCase() ?? null;
     } catch {
         return null;
     }
 }
 
-async function writeJson(name, value) {
-    await mkdir(app.getPath('userData'), { recursive: true });
-    await writeFile(file(name), JSON.stringify(value, null, 2), 'utf8');
-}
-
-async function trialStartedAt() {
-    const trial = await readJson('trial.json');
-
-    if (trial?.startedAt) {
-        return trial.startedAt;
-    }
-
-    const startedAt = new Date().toISOString();
-    await writeJson('trial.json', { startedAt });
-
-    return startedAt;
-}
-
 /** @type {Promise<string> | null} */
 let deviceIdOnce = null;
 
-/** This PC's ID for the website: a random UUID made once. */
+/** This PC's ID for the website: from the machine ID, or a random one kept in licence.dat when that can't be read. */
 function deviceId() {
     deviceIdOnce ??= (async () => {
-        const saved = await readJson('device.json');
+        const guid = await machineGuid();
 
-        if (typeof saved?.id === 'string' && saved.id) {
-            return saved.id;
+        if (guid) {
+            return createHash('sha256').update(`${brand.appId}/${guid}`).digest('hex');
+        }
+
+        const saved = (await state()).fallbackDeviceId;
+
+        if (saved) {
+            return saved;
         }
 
         const id = randomUUID();
-        await writeJson('device.json', { id }).catch(() => undefined);
+        await saveState((current) => ({ ...current, fallbackDeviceId: id })).catch(() => undefined);
 
         return id;
     })();
@@ -67,19 +133,21 @@ function deviceId() {
 }
 
 /**
- * The licence API, or none: PANEL_LICENSE_API points at another site (like
- * a local copy) or switches it off with "off"; screenshots and click tests
- * stay offline unless pointed somewhere.
+ * The licence API. A packaged app always uses the website's; a test run
+ * may point PANEL_LICENSE_API elsewhere (or "off"), and screenshots and
+ * click tests run without one.
  */
 function apiBase() {
-    const override = process.env.PANEL_LICENSE_API;
+    if (development) {
+        const override = process.env.PANEL_LICENSE_API;
 
-    if (override) {
-        return override === 'off' ? null : override.replace(/\/+$/, '');
-    }
+        if (override) {
+            return override === 'off' ? null : override.replace(/\/+$/, '');
+        }
 
-    if (process.env.PANEL_SCREENSHOTS || process.env.PANEL_CLICKTEST || !brand.website) {
-        return null;
+        if (process.env.PANEL_SCREENSHOTS || process.env.PANEL_CLICKTEST) {
+            return null;
+        }
     }
 
     return `${brand.website.replace(/\/+$/, '')}/api/v1`;
@@ -87,8 +155,10 @@ function apiBase() {
 
 /** @returns {Promise<import('./license-online.mjs').OnlineContext>} */
 async function context() {
+    const api = apiBase();
+
     return {
-        api: apiBase() ?? '',
+        api: api ?? '',
         // Chromium's network stack: proxies and the Windows certificate store, like a browser.
         fetch: (url, init) => net.fetch(url, init),
         publicPem: PUBLIC_KEY,
@@ -96,10 +166,12 @@ async function context() {
         statusPrefix: `${brand.licenseKeyPrefix}S`,
         deviceId: await deviceId(),
         deviceName: os.hostname().slice(0, 255),
+        // Only a test run without a website may go without the website's confirmation.
+        allowUnconfirmed: development && !api,
     };
 }
 
-/** Changes to license.json, one after another. */
+/** Changes to the licence, one after another. */
 let queue = Promise.resolve();
 
 function exclusive(run) {
@@ -109,9 +181,41 @@ function exclusive(run) {
     return next;
 }
 
+/** Remember the latest time seen, so a clock turned back can be told apart. */
+async function noteTime(current, now) {
+    const latest = Math.max(Number(current.latestSeen) || 0, now.getTime());
+
+    if (latest === current.latestSeen) {
+        return current;
+    }
+
+    const next = { ...current, latestSeen: latest };
+
+    if (Date.now() - seenWrittenAt > SEEN_EVERY_MS) {
+        return saveState((saved) => ({ ...saved, latestSeen: Math.max(Number(saved.latestSeen) || 0, latest) })).catch(() => next);
+    }
+
+    stateOnce = Promise.resolve(next);
+
+    return next;
+}
+
 export const licence = {
     async status() {
-        return statusFor({ saved: await readJson('license.json'), trialStartedAt: await trialStartedAt(), trialDays: brand.trialDays, ctx: await context() });
+        const ctx = await context();
+        const now = new Date();
+        const current = await state();
+        // The latest time seen before this moment: a check against it, then this moment joins it.
+        const latestSeen = current.latestSeen ?? null;
+        let local = current;
+
+        if (ctx.allowUnconfirmed && !current.localTrialStartedAt) {
+            local = await saveState((saved) => ({ ...saved, localTrialStartedAt: now.toISOString() }));
+        }
+
+        await noteTime(local, now);
+
+        return statusFor({ saved: local.record ?? null, trialToken: local.trialToken ?? null, trialStartedAt: local.localTrialStartedAt ?? null, trialDays: brand.trialDays, ctx, now, latestSeen });
     },
 
     /** @param {string} key */
@@ -135,7 +239,7 @@ export const licence = {
                 return { ok: false, error: result.error };
             }
 
-            await writeJson('license.json', result.record);
+            await saveState((current) => ({ ...current, record: result.record }));
 
             return { ok: true, status: await this.status() };
         });
@@ -143,17 +247,33 @@ export const licence = {
 
     /**
      * Check in with the website (on start and every few hours): picks up a
-     * renewed or upgraded key, and a revocation. Without a key, or offline
-     * builds, nothing is sent.
+     * renewed or upgraded key and a revocation, and a fresh signed status
+     * that keeps offline use going. Without a key it fetches this PC's trial
+     * dates (the same ones every time; a fresh signature puts a clock right).
      */
     check() {
         return exclusive(async () => {
-            const saved = await readJson('license.json');
+            const current = await state();
             const ctx = await context();
+            const record = current.record && 'key' in current.record ? current.record : null;
 
-            if (ctx.api && saved?.key) {
-                const result = await validateOnline(saved, ctx);
-                await writeJson('license.json', 'revoked' in result ? { revoked: true, revokedAt: new Date().toISOString() } : result.record);
+            if (ctx.api && record?.key) {
+                const result = await validateOnline(record, ctx);
+                const confirmed = 'record' in result && result.record.token ? readStatusToken(result.record.token, PUBLIC_KEY, ctx.statusPrefix) : null;
+
+                await saveState((saved) => ({
+                    ...saved,
+                    record: 'revoked' in result ? { revoked: true, revokedAt: new Date().toISOString() } : result.record,
+                    // The website's own time replaces the latest time seen, so a clock that ran ahead and was put right doesn't stay locked.
+                    latestSeen: confirmed ? Date.parse(confirmed.checked) : saved.latestSeen,
+                }));
+            } else if (ctx.api) {
+                const trial = await startTrialOnline(ctx);
+
+                if (trial.ok) {
+                    const checked = readTrialToken(trial.token, PUBLIC_KEY, ctx.statusPrefix)?.checked;
+                    await saveState((saved) => ({ ...saved, trialToken: trial.token, latestSeen: checked ? Date.parse(checked) : saved.latestSeen }));
+                }
             }
 
             return this.status();
@@ -163,14 +283,15 @@ export const licence = {
     /** Take the licence off this PC, and free its seat on the website when it answers. */
     remove() {
         return exclusive(async () => {
-            const saved = await readJson('license.json');
+            const current = await state();
             const ctx = await context();
+            const record = current.record && 'key' in current.record ? current.record : null;
 
-            if (ctx.api && saved?.key) {
-                await deactivateOnline(saved.key, { ...ctx, timeoutMs: 5000 });
+            if (ctx.api && record?.key) {
+                await deactivateOnline(record.key, { ...ctx, timeoutMs: 5000 });
             }
 
-            await rm(file('license.json'), { force: true });
+            await saveState((saved) => ({ ...saved, record: null }));
 
             return this.status();
         });

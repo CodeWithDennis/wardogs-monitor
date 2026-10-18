@@ -17,14 +17,23 @@ import { cleanSummary, serverLabel, statusLine, tooltip } from './tray-status.mj
 import { isWidgetKind, MAX_WIDGETS, onScreen, placeWidget, WIDGET_KINDS } from './widgets.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const devServer = process.env.VITE_DEV_SERVER_URL;
+// The Vite dev server in development only: a packaged app always loads its own files.
+const devServer = app.isPackaged ? undefined : process.env.VITE_DEV_SERVER_URL;
 const ICON = path.join(here, '..', 'build', 'icon.png');
 /** 16 px, with @1.25x … @3x siblings Electron picks up for scaled displays (scripts/make-icon.mjs). */
 const TRAY_ICON = path.join(here, '..', 'build', 'tray', 'tray.png');
 
+/**
+ * Switches for screenshot runs and tests (PANEL_USER_DATA, PANEL_SCREENSHOTS,
+ * PANEL_CLICKTEST, PANEL_TRAYTEST). Only an app started from the source
+ * reads them: a packaged app ignores them, so none can be used to change how
+ * an installed copy behaves.
+ */
+const testSwitch = (name) => (app.isPackaged ? undefined : process.env[name]);
+
 // Screenshots and tests run against their own data folder, never the real one.
-if (process.env.PANEL_USER_DATA) {
-    app.setPath('userData', process.env.PANEL_USER_DATA);
+if (testSwitch('PANEL_USER_DATA')) {
+    app.setPath('userData', testSwitch('PANEL_USER_DATA'));
 } else {
     // A data folder that stays put whatever the product is called; saved
     // servers, preferences and the log come along from an older name once.
@@ -63,7 +72,7 @@ Menu.setApplicationMenu(null);
 app.commandLine.appendSwitch('disable-features', 'IntensiveWakeUpThrottling');
 
 // Screenshot runs capture a window that may sit behind others; keep it painting and animating there.
-if (process.env.PANEL_SCREENSHOTS) {
+if (testSwitch('PANEL_SCREENSHOTS')) {
     app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
     app.commandLine.appendSwitch('disable-renderer-backgrounding');
 }
@@ -491,7 +500,7 @@ async function checkLicenceFromTray() {
  * it was started from.
  */
 function applyLoginItem(enabled) {
-    if (!app.isPackaged || process.env.PANEL_USER_DATA) {
+    if (!app.isPackaged) {
         return;
     }
 
@@ -691,6 +700,9 @@ const LOCKED = {
     licence: 'Your licence has ended. Renew it under Options → Licence → Manage subscription; the app picks up the renewal by itself. The demo server still works.',
     revoked: 'Your licence was revoked. Activate another licence under Options → Licence to keep using your servers. The demo server still works.',
     offline: 'Your licence could not be confirmed online for too long. Connect this PC to the internet so the app can check it. The demo server still works.',
+    unconfirmed: 'Your licence is not confirmed for this PC yet. Connect to the internet so the app can activate it. The demo server still works.',
+    'trial-unconfirmed': 'Connect to the internet once to start your free trial. The demo server works without it.',
+    clock: "This PC's clock is set earlier than it should be. Set the date and time right, or connect to the internet so the app can check it. The demo server still works.",
 };
 
 /**
@@ -993,7 +1005,7 @@ if (!app.requestSingleInstanceLock()) {
         // Started by Windows at sign-in (--hidden), or set to start in the
         // tray. Never without a tray to open it from, nor while screenshots
         // or the click test drive the window.
-        const automated = process.env.PANEL_SCREENSHOTS || process.env.PANEL_CLICKTEST || process.env.PANEL_TRAYTEST;
+        const automated = testSwitch('PANEL_SCREENSHOTS') || testSwitch('PANEL_CLICKTEST') || testSwitch('PANEL_TRAYTEST');
         const hidden = Boolean(tray) && !automated && (process.argv.includes('--hidden') || prefs.startMinimized);
 
         createMainWindow({ hidden });
@@ -1012,19 +1024,19 @@ if (!app.requestSingleInstanceLock()) {
         checkLicence();
         setInterval(checkLicence, CHECK_EVERY_MS);
 
-        if (process.env.PANEL_CLICKTEST) {
+        if (testSwitch('PANEL_CLICKTEST')) {
             const { clickTest } = await import('../scripts/capture.mjs');
-            await clickTest({ app, mainWindow, file: process.env.PANEL_CLICKTEST });
+            await clickTest({ app, mainWindow, file: testSwitch('PANEL_CLICKTEST') });
         }
 
-        if (process.env.PANEL_TRAYTEST) {
+        if (testSwitch('PANEL_TRAYTEST')) {
             const { trayTest } = await import('../scripts/capture.mjs');
-            await trayTest({ mainWindow, tray, trayMenu, file: process.env.PANEL_TRAYTEST });
+            await trayTest({ mainWindow, tray, trayMenu, file: testSwitch('PANEL_TRAYTEST') });
         }
 
-        if (process.env.PANEL_SCREENSHOTS) {
+        if (testSwitch('PANEL_SCREENSHOTS')) {
             const { captureViews } = await import('../scripts/capture.mjs');
-            await captureViews({ app, mainWindow, openWidget, getWidget: (kind) => widgetWindows.get(openWidgets().find((widget) => widget.kind === kind)?.id ?? ''), dir: process.env.PANEL_SCREENSHOTS }).catch((error) => {
+            await captureViews({ app, mainWindow, openWidget, getWidget: (kind) => widgetWindows.get(openWidgets().find((widget) => widget.kind === kind)?.id ?? ''), dir: testSwitch('PANEL_SCREENSHOTS') }).catch((error) => {
                 console.error('[capture] failed:', error);
                 app.exit(1);
             });

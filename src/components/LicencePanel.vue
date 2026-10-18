@@ -72,7 +72,30 @@ const stateLabel = computed(() => {
         return `${licence.trialDaysLeft} ${licence.trialDaysLeft === 1 ? 'day' : 'days'} left`;
     }
 
-    return licence.reason === 'offline' ? 'Needs a check' : licence.reason === 'revoked' ? 'Revoked' : 'Ended';
+    return licence.reason === 'offline' || licence.reason === 'unconfirmed' || licence.reason === 'trial-unconfirmed' || licence.reason === 'clock' ? 'Needs a check' : licence.reason === 'revoked' ? 'Revoked' : 'Ended';
+});
+
+/** The title and line for a locked app, by why it is locked. */
+const locked = computed(() => {
+    const licence = status.value;
+    const servers = 'Your servers are locked until then; the demo server still works.';
+
+    switch (licence?.reason) {
+        case 'licence':
+            return { title: `Your licence ended on ${licence.expires ? date(licence.expires) : 'its last day'}`, text: 'Your servers are locked until the licence is renewed. Renewals are picked up by themselves; the demo server still works.' };
+        case 'revoked':
+            return { title: 'Your licence was revoked', text: 'Your servers are locked until a licence is activated. The demo server still works.' };
+        case 'offline':
+            return { title: 'Your licence needs an online check', text: `Connect this PC to the internet so the app can confirm your licence with ${websiteHost}. ${servers}` };
+        case 'unconfirmed':
+            return { title: 'Your licence is not confirmed for this PC', text: `A licence is activated online once per PC. Connect to the internet and check again. ${servers}` };
+        case 'trial-unconfirmed':
+            return { title: 'Start your free trial', text: `The trial starts the first time this PC reaches ${websiteHost}. Connect to the internet and check again; the demo server works without it.` };
+        case 'clock':
+            return { title: "This PC's clock is behind", text: `The date and time are set earlier than when the app last ran. Set them right, or connect to the internet so the app can check with ${websiteHost}. ${servers}` };
+        default:
+            return { title: 'Your free trial has ended', text: 'Your servers are locked until a licence is activated. The demo server still works.' };
+    }
 });
 
 /** The licence's details as label and value pairs, shown as tiles under the status. */
@@ -107,7 +130,7 @@ const facts = computed(() => {
 });
 
 /** Licensed, or ended with a renewal the website may already know about: worth asking it again. */
-const canCheck = computed(() => status.value?.state === 'licensed' || status.value?.reason === 'licence' || status.value?.reason === 'offline');
+const canCheck = computed(() => status.value?.state === 'licensed' || ['licence', 'offline', 'unconfirmed', 'trial-unconfirmed', 'clock'].includes(status.value?.reason ?? ''));
 
 const showsBilling = computed(() => status.value?.state === 'licensed' || (status.value?.reason === 'licence' && !!status.value.subscription));
 
@@ -185,26 +208,8 @@ const buy = () => BRAND.website && window.panel.openExternal(BRAND.website);
                     <p class="muted">Everything works during the {{ status.trialDays }}-day trial, for up to {{ serverCount(status.maxServers) }}. After it, your servers need a licence; the demo server stays free.</p>
                 </template>
                 <template v-else-if="status">
-                    <h3>
-                        {{
-                            status.reason === 'licence'
-                                ? `Your licence ended on ${status.expires ? date(status.expires) : 'its last day'}`
-                                : status.reason === 'revoked'
-                                  ? 'Your licence was revoked'
-                                  : status.reason === 'offline'
-                                    ? 'Your licence needs an online check'
-                                    : 'Your free trial has ended'
-                        }}
-                    </h3>
-                    <p class="muted">
-                        {{
-                            status.reason === 'offline'
-                                ? `Connect this PC to the internet so the app can confirm your licence with ${websiteHost}. Your servers are locked until then; the demo server still works.`
-                                : status.reason === 'licence'
-                                  ? 'Your servers are locked until the licence is renewed. Renewals are picked up by themselves; the demo server still works.'
-                                  : 'Your servers are locked until a licence is activated. The demo server still works.'
-                        }}
-                    </p>
+                    <h3>{{ locked.title }}</h3>
+                    <p class="muted">{{ locked.text }}</p>
                 </template>
             </div>
 

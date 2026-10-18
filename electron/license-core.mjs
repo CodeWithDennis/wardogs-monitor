@@ -155,22 +155,43 @@ export function readStatusToken(token, publicPem, prefix) {
 }
 
 /**
+ * Read a trial token from the website: proof, signed with the same key
+ * pair, of when this PC's free trial started and ends. The website keeps
+ * the dates, so reinstalling or deleting files never restarts a trial.
+ *
+ * @param {string} token
+ * @param {string} publicPem
+ * @param {string} prefix
+ * @returns {{ v: number, kind: 'trial', device: string, started: string, ends: string, checked: string } | null}
+ */
+export function readTrialToken(token, publicPem, prefix) {
+    const read = readSigned(token, publicPem, prefix);
+    const trial = read.ok ? read.payload : null;
+
+    return trial?.kind === 'trial' && typeof trial.device === 'string' && typeof trial.started === 'string' && typeof trial.ends === 'string' && typeof trial.checked === 'string' ? trial : null;
+}
+
+/**
  * Where the app stands: licensed, in its trial, or locked, and how many real
  * servers that runs (`maxServers`, null for unlimited, 0 when locked).
  *
  * `revoked` is set when the website said the licence on this PC was revoked
- * (its key is then gone); `offlineExpired` when the website could not be
- * reached since the last signed status ran out.
+ * (its key is then gone). `lock` locks a licence that is otherwise valid:
+ * 'unconfirmed' (never confirmed online for this PC), 'offline' (the last
+ * signed confirmation ran out) or 'clock' (the PC's clock was turned back).
+ * The trial ends at `trialEndsAt` (signed by the website) or, without it,
+ * `trialDays` after `trialStartedAt`; `trialLock` locks it the same way.
  *
- * @param {{ licence: Licence | null, trialStartedAt: string | null, trialDays: number, now?: Date, revoked?: boolean, offlineExpired?: boolean }} input
+ * @param {{ licence: Licence | null, trialStartedAt?: string | null, trialEndsAt?: string | null, trialDays: number, now?: Date, revoked?: boolean, offlineExpired?: boolean, lock?: 'unconfirmed' | 'offline' | 'clock' | null, trialLock?: 'unconfirmed' | 'clock' | null }} input
  */
-export function licenceStatus({ licence, trialStartedAt, trialDays, now = new Date(), revoked = false, offlineExpired = false }) {
+export function licenceStatus({ licence, trialStartedAt = null, trialEndsAt = null, trialDays, now = new Date(), revoked = false, offlineExpired = false, lock = null, trialLock = null }) {
     const today = now.toISOString().slice(0, 10);
     const who = licence ? { licensee: licence.name, email: licence.email, plan: licence.plan, expires: licence.expires } : { licensee: null, email: null, plan: null, expires: null };
+    const licenceLock = lock ?? (offlineExpired ? 'offline' : null);
 
     if (licence && (!licence.expires || licence.expires >= today)) {
-        return offlineExpired
-            ? { state: 'expired', reason: 'offline', ...who, trialDaysLeft: 0, maxServers: 0 }
+        return licenceLock
+            ? { state: 'expired', reason: licenceLock, ...who, trialDaysLeft: 0, maxServers: 0 }
             : { state: 'licensed', ...who, trialDaysLeft: 0, maxServers: licence.servers ?? null };
     }
 
@@ -182,8 +203,13 @@ export function licenceStatus({ licence, trialStartedAt, trialDays, now = new Da
         return { state: 'expired', reason: 'revoked', ...who, trialDaysLeft: 0, maxServers: 0 };
     }
 
+    if (trialLock) {
+        return { state: 'expired', reason: trialLock === 'clock' ? 'clock' : 'trial-unconfirmed', trialDaysLeft: 0, ...who, maxServers: 0 };
+    }
+
     const started = trialStartedAt ? new Date(trialStartedAt).getTime() : now.getTime();
-    const daysLeft = Math.max(0, Math.ceil((started + trialDays * DAY - now.getTime()) / DAY));
+    const ends = trialEndsAt ? Date.parse(trialEndsAt) : started + trialDays * DAY;
+    const daysLeft = Math.max(0, Math.ceil((ends - now.getTime()) / DAY));
 
     return daysLeft > 0
         ? { state: 'trial', trialDaysLeft: daysLeft, ...who, maxServers: TRIAL_SERVERS }

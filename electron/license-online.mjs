@@ -1,14 +1,17 @@
 import { createHash } from 'node:crypto';
-import { licenceStatus, readKey, readStatusToken } from './license-core.mjs';
+import { licenceStatus, readKey, readStatusToken, readTrialToken } from './license-core.mjs';
 
 /**
  * The online half of the licence: activating this PC on the website,
- * checking in now and then, and freeing the seat again. The key stays the
- * licence and works offline; the website adds seats per PC, revocation,
- * and renewed keys (a subscription's new expiry, or a plan change's new
- * server limit, are signed into a fresh key the check hands back).
+ * checking in now and then, freeing the seat again, and the free trial.
+ * The website is the source of truth: a key only counts on a PC the
+ * website confirmed, through a signed status token bound to that PC, and
+ * only until the token's `valid_until` (the offline grace). A trial's dates
+ * come from the website the same way. Offline use is fine, but only after
+ * that first confirmation, and never past the grace or with the clock
+ * turned back.
  *
- * Only the key, a random ID for this PC and the PC's name are ever sent.
+ * Only the key, an ID for this PC and the PC's name are ever sent.
  * Nothing here logs, and nothing here touches Electron or files: the caller
  * passes `fetch` and keeps the record, so it can be tested on its own.
  */
@@ -43,9 +46,14 @@ export const CHECK_EVERY_MS = 12 * 60 * 60 * 1000;
  *   deviceName: string,
  *   timeoutMs?: number,
  *   now?: () => Date,
+ *   allowUnconfirmed?: boolean,
  * }} OnlineContext
  * @typedef {{ kind: 'ok', data: any } | { kind: 'refused', code: string, message: string } | { kind: 'unreachable' }} ApiAnswer
  */
+
+/** How far the clock may sit behind the website's own time, or behind the latest time seen, before it counts as turned back. */
+export const CLOCK_SKEW_MS = 10 * 60 * 1000;
+export const CLOCK_BACK_MS = 60 * 60 * 1000;
 
 /** The website keeps only this hash of the device ID; tokens carry it too. */
 export const hashDevice = (deviceId) => createHash('sha256').update(String(deviceId)).digest('hex');
@@ -60,6 +68,8 @@ const REFUSED = {
     not_activated: 'This licence is not activated on this PC.',
 };
 
+const UNREACHABLE = 'Could not reach wardogsmonitor.com. A licence is activated online once; check the internet connection and try again.';
+
 /**
  * POST to the licence API. A 403 or 422 is a clear answer ("refused");
  * anything else that is not a success (no network, a timeout, the site
@@ -70,14 +80,24 @@ const REFUSED = {
  * @param {{ key: string, device_id: string, device_name?: string }} body
  * @returns {Promise<ApiAnswer>}
  */
-export async function callLicenceApi(ctx, action, body) {
+export function callLicenceApi(ctx, action, body) {
+    return callApi(ctx, `licenses/${action}`, body);
+}
+
+/**
+ * @param {OnlineContext} ctx
+ * @param {string} path
+ * @param {object} body
+ * @returns {Promise<ApiAnswer>}
+ */
+async function callApi(ctx, path, body) {
     const timeoutMs = ctx.timeoutMs ?? 10_000;
     const controller = new AbortController();
     let timer;
 
     try {
         const response = await Promise.race([
-            ctx.fetch(`${ctx.api}/licenses/${action}`, {
+            ctx.fetch(`${ctx.api}/${path}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
                 body: JSON.stringify(body),
@@ -172,9 +192,9 @@ function afterActive(record, data, ctx) {
 
 /**
  * Activate a key on this PC. The key must already have passed the offline
- * check. A clear refusal stops the activation with the website's reason;
- * when the website cannot be reached the key is activated offline and
- * marked as not yet confirmed.
+ * check. The website must answer: a refusal stops the activation with its
+ * reason, and so does no answer at all, as a key that was never confirmed
+ * online for this PC would let one key run on any number of PCs.
  *
  * @param {string} key
  * @param {OnlineContext} ctx
@@ -190,7 +210,14 @@ export async function activateOnline(key, ctx) {
         return { ok: false, code: answer.code, error: answer.message };
     }
 
-    return { ok: true, record: answer.kind === 'ok' ? afterActive(record, answer.data, ctx) : { ...record, lastFailedAt: nowOf(ctx).toISOString() } };
+    if (answer.kind === 'unreachable') {
+        return { ok: false, code: 'unreachable', error: UNREACHABLE };
+    }
+
+    const activated = afterActive(record, answer.data, ctx);
+
+    // An answer without a genuine token for this PC is no confirmation.
+    return activated.token ? { ok: true, record: activated } : { ok: false, code: 'invalid', error: REFUSED.invalid };
 }
 
 /**
@@ -254,42 +281,95 @@ export async function deactivateOnline(key, ctx) {
 }
 
 /**
- * Whether the website's last signed status has run out and a check since
- * then could not reach it. Without a token the key alone counts.
+ * Whether the PC's clock was turned back: behind the time the website
+ * signed into a token, or well behind the latest time this app has seen.
+ *
+ * @param {Date} now
+ * @param {string | null | undefined} checked The website's time in a token.
+ * @param {number | null | undefined} latestSeen The latest time seen, in ms.
+ */
+export function clockTurnedBack(now, checked, latestSeen) {
+    const signed = checked ? Date.parse(checked) : NaN;
+
+    return (Number.isFinite(signed) && now.getTime() < signed - CLOCK_SKEW_MS) || (Number.isFinite(latestSeen) && now.getTime() < Number(latestSeen) - CLOCK_BACK_MS);
+}
+
+/**
+ * What locks a valid key on this PC: no genuine token for it ('unconfirmed'),
+ * the token's grace ran out ('offline'), or the clock was turned back
+ * ('clock'). Null when it may run.
  *
  * @param {LicenceRecord} record
  * @param {string} licenceId
- * @param {Pick<OnlineContext, 'publicPem' | 'statusPrefix' | 'deviceId'>} ctx
+ * @param {Pick<OnlineContext, 'publicPem' | 'statusPrefix' | 'deviceId' | 'allowUnconfirmed'>} ctx
  * @param {Date} now
+ * @param {number | null} [latestSeen]
+ * @returns {'unconfirmed' | 'offline' | 'clock' | null}
  */
-export function offlineTooLong(record, licenceId, ctx, now) {
+export function licenceLock(record, licenceId, ctx, now, latestSeen = null) {
     const token = tokenFor(record.token, licenceId, ctx);
 
     if (!token) {
-        return false;
+        return ctx.allowUnconfirmed ? null : 'unconfirmed';
     }
 
-    const until = Date.parse(token.valid_until);
+    if (clockTurnedBack(now, token.checked, latestSeen)) {
+        return 'clock';
+    }
 
-    return until < now.getTime() && Boolean(record.lastFailedAt) && Date.parse(record.lastFailedAt) >= until;
+    return Date.parse(token.valid_until) >= now.getTime() ? null : 'offline';
+}
+
+/**
+ * A trial token from the website, if it is genuine and about this PC.
+ *
+ * @param {string | null | undefined} token
+ * @param {Pick<OnlineContext, 'publicPem' | 'statusPrefix' | 'deviceId'>} ctx
+ */
+export function trialFor(token, ctx) {
+    const trial = token ? readTrialToken(token, ctx.publicPem, ctx.statusPrefix) : null;
+
+    return trial && trial.device === hashDevice(ctx.deviceId) ? trial : null;
+}
+
+/**
+ * Ask the website for this PC's trial: it starts it on the first call and
+ * hands back the same dates on every call after, signed for this PC.
+ *
+ * @param {OnlineContext} ctx
+ * @returns {Promise<{ ok: true, token: string } | { ok: false }>}
+ */
+export async function startTrialOnline(ctx) {
+    const answer = await callApi(ctx, 'trials/start', { device_id: ctx.deviceId });
+    const token = answer.kind === 'ok' && typeof answer.data.token === 'string' ? answer.data.token : null;
+
+    return token && trialFor(token, ctx) ? { ok: true, token } : { ok: false };
 }
 
 /**
  * The status the window sees, from what license.json holds.
  *
- * @param {{ saved: (LicenceRecord & { revoked?: boolean }) | { revoked: true } | null, trialStartedAt: string | null, trialDays: number, ctx: Pick<OnlineContext, 'publicPem' | 'keyPrefix' | 'statusPrefix' | 'deviceId'>, now?: Date }} input
+ * The trial counts from the website's signed `trialToken`; without one it
+ * is locked until the website hands one out, except where
+ * `ctx.allowUnconfirmed` (development and screenshot runs, never a
+ * packaged app) lets `trialStartedAt` stand in.
+ *
+ * @param {{ saved: (LicenceRecord & { revoked?: boolean }) | { revoked: true } | null, trialToken?: string | null, trialStartedAt?: string | null, trialDays: number, ctx: Pick<OnlineContext, 'publicPem' | 'keyPrefix' | 'statusPrefix' | 'deviceId' | 'allowUnconfirmed'>, now?: Date, latestSeen?: number | null }} input
  */
-export function statusFor({ saved, trialStartedAt, trialDays, ctx, now = new Date() }) {
+export function statusFor({ saved, trialToken = null, trialStartedAt = null, trialDays, ctx, now = new Date(), latestSeen = null }) {
     const record = saved && 'key' in saved && saved.key ? saved : null;
     const read = record ? readKey(record.key, ctx.publicPem, ctx.keyPrefix) : null;
     const licence = read?.ok ? read.licence : null;
+    const trial = trialFor(trialToken, ctx);
     const status = licenceStatus({
         licence,
-        trialStartedAt,
+        trialStartedAt: trial ? trial.started : trialStartedAt,
+        trialEndsAt: trial?.ends ?? null,
         trialDays,
         now,
         revoked: !licence && Boolean(saved?.revoked),
-        offlineExpired: licence && record ? offlineTooLong(record, licence.id, ctx, now) : false,
+        lock: licence && record ? licenceLock(record, licence.id, ctx, now, latestSeen) : null,
+        trialLock: trial ? (clockTurnedBack(now, trial.checked, latestSeen) ? 'clock' : null) : ctx.allowUnconfirmed ? null : 'unconfirmed',
     });
     const kept = licence && record ? record : null;
 
