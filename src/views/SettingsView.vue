@@ -374,7 +374,7 @@ function int(field: keyof ServerSettings, event: Event): void {
  */
 .setting {
     display: grid;
-    grid-template-columns: minmax(180px, 1fr) minmax(0, 1.3fr);
+    grid-template-columns: minmax(180px, 360px) minmax(0, 1fr);
     gap: 28px;
     padding: 16px 0;
 }
