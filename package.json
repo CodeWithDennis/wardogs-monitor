@@ -1,7 +1,7 @@
 {
   "name": "wardogs-monitor",
   "productName": "Wardogs Monitor",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "Monitor, moderate and run your Wardogs dedicated servers from one Windows app.",
   "private": true,
   "author": "Wardogs Monitor",
@@ -42,7 +42,11 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "Wardogs-Monitor-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "Wardogs-Monitor-${version}-portable.${ext}"
     }
   },
   "devDependencies": {

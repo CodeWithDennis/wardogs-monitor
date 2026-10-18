@@ -86,7 +86,7 @@ export const state = reactive({
         widgets: [],
     } as Preferences,
     limits: null as Limits | null,
-    version: '0.1.0',
+    version: '0.0.1',
     selectedPlayer: null as string | null,
     selectedBan: null as string | null,
     search: '',
