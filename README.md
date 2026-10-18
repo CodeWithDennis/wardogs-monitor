@@ -123,14 +123,16 @@ Screenshot mode (`npm run screenshots [folder]`) never touches your own data: it
 
 GitHub Actions ([`.github/workflows/build.yml`](.github/workflows/build.yml)) runs on every push to `main` and every pull request. It installs, typechecks, runs the tests and builds the installer and portable exe on `windows-latest`. The builds are kept as the run's artifacts.
 
-To publish a release:
+To publish a release, tag the version that is in `package.json` and push the tag. For the first release (0.0.1, already set):
 
 ```bash
-npm version patch     # or minor / major: bumps package.json and makes a git tag
-git push --follow-tags
+git tag v0.0.1
+git push origin v0.0.1
 ```
 
-A pushed `v*` tag makes the workflow attach both exes to a GitHub release with generated release notes.
+For the next ones, `npm version patch` (or `minor` / `major`) bumps `package.json` and makes the matching tag; then `git push --follow-tags`.
+
+A pushed `v*` tag makes the workflow build both exes and attach them to a GitHub release with generated release notes. The workflow stops if the tag does not match the version in `package.json`.
 
 Code signing: the workflow builds unsigned (`CSC_IDENTITY_AUTO_DISCOVERY=false`). To sign, add the certificate as `CSC_LINK` (base64 .pfx) and `CSC_KEY_PASSWORD` repository secrets, pass them to the build step, and remove that variable.
 

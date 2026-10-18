@@ -43,9 +43,14 @@ const tab = defineModel<string>('tab');
 
 <style scoped>
 /* Without tabs under it (.plain), the header keeps the same room below the heading as above it. */
+/*
+ * The actions run to the right edge, under the window's own buttons (34px
+ * high, more in page pixels when zoomed out): the top padding keeps the
+ * centred actions below them.
+ */
 .view-header {
     flex: none;
-    padding: 30px 35px 0;
+    padding: max(30px, calc(var(--caption-h) - 4px)) 35px 0;
     border-bottom: 1px solid var(--line);
 }
 
@@ -60,8 +65,6 @@ const tab = defineModel<string>('tab');
     justify-content: space-between;
     gap: 26.5px;
     min-height: 62px;
-    /* The actions stay clear of the window's own buttons (see .content in Shell.vue; the header already pads 35px). */
-    padding-right: max(0px, calc(var(--caption-clear, var(--caption-w)) - 35px));
 }
 
 .title {
