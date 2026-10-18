@@ -226,7 +226,6 @@ function openPlayer(steamId: string): void {
 .dash {
     display: grid;
     gap: 18px;
-    max-width: 1500px;
 }
 
 .tiles {
