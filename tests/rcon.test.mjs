@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
 import { after, before, test } from 'node:test';
 import { startMockServer } from '../mock/wardogs-mock.mjs';
 import { rcon, RconError } from '../electron/rcon.mjs';
@@ -61,4 +62,48 @@ test('changing the map travels there', async () => {
     const status = await rcon.status(target);
     assert.equal(status.map, 'Bakurani');
     assert.equal(status.lighting, 'DayClear');
+});
+
+test('never follows redirects with the RCON bearer token', async () => {
+    let leakedAuth = null;
+    const sink = createServer((req, res) => {
+        leakedAuth = req.headers.authorization ?? null;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'ok', uptimeSeconds: 1 }));
+    });
+    await new Promise((resolve) => sink.listen(0, '127.0.0.1', resolve));
+
+    const redirector = createServer((_req, res) => {
+        res.writeHead(302, { Location: `http://127.0.0.1:${sink.address().port}/v1/health` });
+        res.end();
+    });
+    await new Promise((resolve) => redirector.listen(0, '127.0.0.1', resolve));
+
+    try {
+        await assert.rejects(
+            rcon.health({ host: '127.0.0.1', port: redirector.address().port, password: 'secret' }),
+            (error) => error instanceof RconError,
+        );
+        assert.equal(leakedAuth, null);
+    } finally {
+        redirector.close();
+        sink.close();
+    }
+});
+
+test('rejects oversized RCON responses', async () => {
+    const huge = createServer((_req, res) => {
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': String(10 * 1024 * 1024) });
+        res.end();
+    });
+    await new Promise((resolve) => huge.listen(0, '127.0.0.1', resolve));
+
+    try {
+        await assert.rejects(
+            rcon.health({ host: '127.0.0.1', port: huge.address().port, password: 'secret' }),
+            (error) => error instanceof RconError,
+        );
+    } finally {
+        huge.close();
+    }
 });

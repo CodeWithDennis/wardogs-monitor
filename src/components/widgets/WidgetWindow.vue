@@ -7,7 +7,7 @@ import StatusWidget from '@/components/widgets/StatusWidget.vue';
 import TopPlayersWidget from '@/components/widgets/TopPlayersWidget.vue';
 import { modeName } from '@/lib/format';
 import { mapName } from '@/lib/maps';
-import { WIDGETS } from '@/lib/widgets';
+import { WIDGETS } from '@/lib/widgetMeta';
 import type { Live, Preferences, SavedServer, WidgetKind } from '@/types';
 
 /**
@@ -26,32 +26,67 @@ const live = ref<Live | null>(null);
 const next = ref<string | null>(null);
 const preferences = ref<Preferences | null>(null);
 let timer: ReturnType<typeof setTimeout> | undefined;
+let alive = true;
+let stopPrefs: (() => void) | null = null;
 
 async function poll(): Promise<void> {
+    if (!alive) {
+        return;
+    }
+
     clearTimeout(timer);
 
     try {
-        live.value = await window.panel.server.live(props.serverId);
+        const reading = await window.panel.server.live(props.serverId);
 
-        if (live.value.online && props.kind === 'status') {
+        if (!alive) {
+            return;
+        }
+
+        live.value = reading;
+
+        if (reading.online && props.kind === 'status') {
             const rotation = await window.panel.server.rotation(props.serverId);
+
+            if (!alive) {
+                return;
+            }
+
             const entry = rotation.entries.find((item) => item.status === 'next');
             next.value = rotation.enabled && entry ? `${mapName(entry.map)} · ${modeName(entry.experiences)}` : null;
         }
     } finally {
-        timer = setTimeout(poll, (preferences.value?.refreshSeconds ?? 5) * 1000);
+        if (alive) {
+            timer = setTimeout(poll, (preferences.value?.refreshSeconds ?? 5) * 1000);
+        }
     }
 }
 
 onMounted(async () => {
     document.documentElement.classList.add('widget-window');
     preferences.value = await window.panel.preferences.get();
-    window.panel.preferences.onChange((value) => (preferences.value = value));
-    server.value = (await window.panel.servers.list()).find((entry) => entry.id === props.serverId) ?? null;
+
+    if (!alive) {
+        return;
+    }
+
+    stopPrefs = window.panel.preferences.onChange((value) => (preferences.value = value));
+    const listed = (await window.panel.servers.list()).find((entry) => entry.id === props.serverId) ?? null;
+
+    if (!alive) {
+        return;
+    }
+
+    server.value = listed;
     poll();
 });
 
-onUnmounted(() => clearTimeout(timer));
+onUnmounted(() => {
+    alive = false;
+    clearTimeout(timer);
+    stopPrefs?.();
+    document.documentElement.classList.remove('widget-window');
+});
 
 const focusMain = () => window.panel.focusMain();
 const close = () => window.panel.widgets.close();

@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, Notification, screen, shell, Tray } from 'electron';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { cpSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -41,7 +41,7 @@ if (testSwitch('PANEL_USER_DATA')) {
             const from = path.join(app.getPath('appData'), previous);
 
             if (existsSync(path.join(from, 'servers.json'))) {
-                for (const file of ['servers.json', 'preferences.json', 'activity.log']) {
+                for (const file of ['servers.json', 'preferences.json', 'banlists.json', 'activity.log']) {
                     if (existsSync(path.join(from, file))) {
                         cpSync(path.join(from, file), path.join(dataFolder, file));
                     }
@@ -78,7 +78,9 @@ if (testSwitch('PANEL_SCREENSHOTS')) {
 let mainWindow = null;
 /** The open widget windows, by widget ID (see openWidget). @type {Map<string, BrowserWindow>} */
 const widgetWindows = new Map();
-/** @type {{ port: number, close: () => Promise<void> } | null} */
+/** Tracks each widget webContents ID so IPC handlers can enforce least privilege. @type {Map<number, { id: string, kind: string, serverId: string }>} */
+const widgetSenders = new Map();
+/** @type {{ port: number, password: string, close: () => Promise<void> } | null} */
 let demo = null;
 /** Saved servers are listed only once the demo server (if any) is up and its port saved. */
 let demoReady = Promise.resolve();
@@ -158,15 +160,32 @@ function lockDown(window) {
     });
 }
 
-/** Only Steam profiles and the product's website open outside the app. */
+/** Safely send an IPC event to every live window. */
+function broadcast(channel, value) {
+    for (const window of BrowserWindow.getAllWindows()) {
+        if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
+            window.webContents.send(channel, value);
+        }
+    }
+}
+
+/** Only Steam profiles/IDs and the product's website open outside the app. */
 function openExternal(url) {
     try {
-        const { protocol, hostname } = new URL(url);
-
+        const parsed = new URL(url);
         const website = brand.website ? new URL(brand.website).hostname : null;
 
-        if (protocol === 'https:' && (hostname === 'steamcommunity.com' || hostname === website)) {
-            shell.openExternal(url);
+        if (parsed.protocol !== 'https:') {
+            return;
+        }
+
+        const isSteamProfile = parsed.hostname === 'steamcommunity.com'
+            && /^\/(profiles\/\d{17}|id\/[A-Za-z0-9_-]{1,64})\/?$/.test(parsed.pathname)
+            && parsed.search === ''
+            && parsed.hash === '';
+
+        if (isSteamProfile || (website && parsed.hostname === website)) {
+            shell.openExternal(parsed.toString());
         }
     } catch {
         // Not a link.
@@ -180,13 +199,21 @@ function openExternal(url) {
  */
 function attachZoom(window, key, onZoom = () => {}) {
     const apply = async (factor) => {
+        if (window.isDestroyed() || window.webContents.isDestroyed()) {
+            return;
+        }
+
         window.webContents.setZoomFactor(factor);
         onZoom(factor);
         const next = await savePreferences({ [key]: factor });
-        BrowserWindow.getAllWindows().forEach((other) => other.webContents.send('preferences:changed', next));
+        broadcast('preferences:changed', next);
     };
 
     const step = (direction) => {
+        if (window.isDestroyed() || window.webContents.isDestroyed()) {
+            return;
+        }
+
         const current = window.webContents.getZoomFactor();
         const index = ZOOM_STEPS.findIndex((value) => value >= current - 0.001);
         const at = index === -1 ? ZOOM_STEPS.length - 1 : index;
@@ -214,6 +241,11 @@ function attachZoom(window, key, onZoom = () => {}) {
 
     window.webContents.on('did-finish-load', async () => {
         const factor = (await preferences.get())[key] ?? 1;
+
+        if (window.isDestroyed() || window.webContents.isDestroyed()) {
+            return;
+        }
+
         window.webContents.setZoomFactor(factor);
         onZoom(factor);
     });
@@ -293,12 +325,17 @@ function createMainWindow({ hidden }) {
         mainWindow.show();
     }
 
-    const remember = () => {
-        if (!mainWindow || mainWindow.isMinimized() || !mainWindow.isVisible()) {
-            return;
-        }
+    let boundsTimer;
 
-        savePreferences({ maximized: mainWindow.isMaximized(), ...(mainWindow.isMaximized() ? {} : { windowBounds: mainWindow.getBounds() }) });
+    const remember = () => {
+        clearTimeout(boundsTimer);
+        boundsTimer = setTimeout(() => {
+            if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isMinimized() || !mainWindow.isVisible()) {
+                return;
+            }
+
+            savePreferences({ maximized: mainWindow.isMaximized(), ...(mainWindow.isMaximized() ? {} : { windowBounds: mainWindow.getBounds() }) });
+        }, 250);
     };
 
     mainWindow.on('resized', remember);
@@ -338,8 +375,13 @@ function createMainWindow({ hidden }) {
     }
 
     mainWindow.on('closed', () => {
+        clearTimeout(boundsTimer);
         mainWindow = null;
-        widgetWindows.forEach((window) => window.close());
+        widgetWindows.forEach((window) => {
+            if (!window.isDestroyed()) {
+                window.close();
+            }
+        });
     });
 }
 
@@ -380,9 +422,15 @@ function showNotice(title, body, onClick) {
         return;
     }
 
-    notice = new Notification({ title, body, icon: ICON });
-    notice.on('click', onClick);
-    notice.show();
+    const current = new Notification({ title, body, icon: ICON });
+    notice = current;
+    current.on('click', onClick);
+    current.on('close', () => {
+        if (notice === current) {
+            notice = null;
+        }
+    });
+    current.show();
 }
 
 /**
@@ -469,7 +517,10 @@ function trayMenu() {
 /** Open the window on one server, from the tray menu. */
 function openServer(serverId) {
     showMain();
-    mainWindow?.webContents.send('tray:open-server', serverId);
+
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+        mainWindow.webContents.send('tray:open-server', serverId);
+    }
 }
 
 /**
@@ -528,7 +579,11 @@ async function askToQuitDuringSync() {
 /** The open widgets, for the main window. */
 const openWidgets = () => (prefs.widgets ?? []).filter((widget) => widgetWindows.has(widget.id)).map(({ id, kind, serverId }) => ({ id, kind, serverId }));
 
-const announceWidgets = () => mainWindow?.webContents.send('widgets:changed', openWidgets());
+const announceWidgets = () => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+        mainWindow.webContents.send('widgets:changed', openWidgets());
+    }
+};
 
 /**
  * Open a widget on a server, or bring it forward when that one is open
@@ -579,7 +634,9 @@ async function openWidget(kind, serverId, saved) {
         webPreferences,
     });
 
+    const senderId = window.webContents.id;
     widgetWindows.set(id, window);
+    widgetSenders.set(senderId, { id, kind, serverId });
     window.setOpacity(prefs.miniOpacity);
 
     if (prefs.miniAlwaysOnTop) {
@@ -590,19 +647,26 @@ async function openWidget(kind, serverId, saved) {
     attachZoom(window, 'miniZoom');
     load(window, `widget/${kind}/${serverId}`);
 
-    await savePreferences((current) => ({ widgets: [...current.widgets.filter((widget) => widget.id !== id), { id, kind, serverId, bounds: window.getBounds() }] }));
+    await savePreferences((current) => ({ widgets: [...current.widgets.filter((widget) => widget.id !== id), { id, kind, serverId, bounds: window.isDestroyed() ? bounds : window.getBounds() }] }));
+
+    let boundsTimer;
 
     const remember = () => {
-        if (!window.isDestroyed()) {
-            const next = window.getBounds();
-            savePreferences((current) => ({ widgets: current.widgets.map((widget) => (widget.id === id ? { ...widget, bounds: next } : widget)) }));
-        }
+        clearTimeout(boundsTimer);
+        boundsTimer = setTimeout(() => {
+            if (!window.isDestroyed()) {
+                const next = window.getBounds();
+                savePreferences((current) => ({ widgets: current.widgets.map((widget) => (widget.id === id ? { ...widget, bounds: next } : widget)) }));
+            }
+        }, 250);
     };
 
     window.on('resized', remember);
     window.on('moved', remember);
     window.on('closed', () => {
+        clearTimeout(boundsTimer);
         widgetWindows.delete(id);
+        widgetSenders.delete(senderId);
 
         // Quitting closes every window: the widgets stay saved, to reopen on the next start.
         if (!isQuitting && mainWindow) {
@@ -633,15 +697,15 @@ async function restoreWidgets() {
     }
 }
 
-/** Start the pretend server and point every saved demo server at it. */
+/** Start the pretend server with a fresh per-session secret and point every saved demo server at it. */
 async function startDemo() {
     if (!demo) {
-        demo = await startMockServer({ port: 0, password: 'demo-password', quiet: true });
+        demo = await startMockServer({ port: 0, password: randomBytes(24).toString('hex'), quiet: true });
     }
 
     for (const server of await servers.list()) {
-        if (server.demo && server.port !== demo.port) {
-            await servers.save({ ...server, port: demo.port });
+        if (server.demo) {
+            await servers.save({ ...server, port: demo.port, password: demo.password });
         }
     }
 
@@ -684,15 +748,38 @@ const publicGroup = (group) => ({
     lastSyncedAt: group.lastSyncedAt,
 });
 
+const WIDGET_ACTIONS = new Set(['broadcast', 'restartMatch', 'endMatch']);
+
 function registerIpc() {
-    const handle = (channel, fn) => ipcMain.handle(channel, (_event, ...args) => fn(...args));
+    const isMain = (event) => mainWindow !== null && !mainWindow.isDestroyed() && event.sender === mainWindow.webContents;
+    const widgetFor = (event) => widgetSenders.get(event.sender.id) ?? null;
 
-    handle('servers:list', async () => {
-        await demoReady;
+    /** Channels only the main window may invoke. */
+    const mainHandle = (channel, fn) => ipcMain.handle(channel, (event, ...args) => {
+        if (!isMain(event)) {
+            throw new Error('Unauthorized IPC caller.');
+        }
 
-        return servers.list();
+        return fn(...args);
     });
-    handle('servers:save', async (input) => {
+
+    /** Channels both the main window and known widget windows may invoke. */
+    const anyHandle = (channel, fn) => ipcMain.handle(channel, (event, ...args) => {
+        if (!isMain(event) && !widgetFor(event)) {
+            throw new Error('Unauthorized IPC caller.');
+        }
+
+        return fn(event, ...args);
+    });
+
+    anyHandle('servers:list', async (event) => {
+        await demoReady;
+        const list = await servers.list();
+        const widget = widgetFor(event);
+
+        return widget ? list.filter((entry) => entry.id === widget.serverId) : list;
+    });
+    mainHandle('servers:save', async (input) => {
         const { value, error } = cleanServer(input);
 
         if (error) {
@@ -716,34 +803,62 @@ function registerIpc() {
 
         return { ok: true, server };
     });
-    handle('servers:remove', async (id) => {
+    mainHandle('servers:remove', async (id) => {
         closeWidgetsFor(String(id));
         await servers.remove(String(id));
         await banLists.update((groups) => ({ groups: dropServer(groups, String(id)) }));
         clearCache(String(id));
     });
-    handle('servers:reorder', (ids) => servers.reorder(Array.isArray(ids) ? ids.map(String) : []));
-    handle('servers:addDemo', async () => {
+    mainHandle('servers:reorder', (ids) => servers.reorder(Array.isArray(ids) ? ids.map(String) : []));
+    mainHandle('servers:addDemo', async () => {
         const mock = await startDemo();
         const existing = (await servers.list()).find((server) => server.demo);
 
         return existing ?? servers.save({ name: 'Demo server', host: '127.0.0.1', port: mock.port, password: mock.password, demo: true });
     });
 
-    handle('server:live', (id) => live(String(id)));
-    handle('server:bans', (id) => bans(String(id)));
-    handle('server:rotation', (id) => rotation(String(id)));
-    handle('server:catalog', (id) => catalog(String(id)));
-    handle('server:identity', (id) => identity(String(id)).catch(() => ({ serverId: null, bannerUrl: null })));
-    handle('server:settings', (id) => readSettings(String(id)));
-    handle('server:act', (id, name, args) => act(String(id), String(name), args ?? {}));
+    anyHandle('server:live', (event, id) => {
+        const serverId = String(id);
+        const widget = widgetFor(event);
+
+        if (widget && widget.serverId !== serverId) {
+            throw new Error('Unauthorized server access.');
+        }
+
+        return live(serverId);
+    });
+    mainHandle('server:bans', (id) => bans(String(id)));
+    anyHandle('server:rotation', (event, id) => {
+        const serverId = String(id);
+        const widget = widgetFor(event);
+
+        if (widget && widget.serverId !== serverId) {
+            throw new Error('Unauthorized server access.');
+        }
+
+        return rotation(serverId);
+    });
+    mainHandle('server:catalog', (id) => catalog(String(id)));
+    mainHandle('server:identity', (id) => identity(String(id)).catch(() => ({ serverId: null, bannerUrl: null })));
+    mainHandle('server:settings', (id) => readSettings(String(id)));
+    anyHandle('server:act', (event, id, name, args) => {
+        const serverId = String(id);
+        const actionName = String(name);
+        const widget = widgetFor(event);
+
+        if (widget && (widget.kind !== 'actions' || widget.serverId !== serverId || !WIDGET_ACTIONS.has(actionName))) {
+            return { ok: false, error: 'This widget cannot run that action.' };
+        }
+
+        return act(serverId, actionName, args ?? {});
+    });
 
     // Linked ban lists. Planning only reads; a sync writes only the plan the
     // user confirmed in the preview (its fingerprint must still match).
     const groupId = (value) => (typeof value === 'string' && value.length > 0 && value.length <= 64 ? value : null);
 
-    handle('banlists:list', async () => (await banLists.list()).map(publicGroup));
-    handle('banlists:save', async (input) => {
+    mainHandle('banlists:list', async () => (await banLists.list()).map(publicGroup));
+    mainHandle('banlists:save', async (input) => {
         const saved = await servers.list();
         const clean = {
             id: input?.id === undefined ? undefined : groupId(input.id) ?? '-',
@@ -758,22 +873,22 @@ function registerIpc() {
 
         return 'error' in answer ? { ok: false, error: answer.error } : { ok: true, group: publicGroup(answer.group) };
     });
-    handle('banlists:remove', async (id) => {
+    mainHandle('banlists:remove', async (id) => {
         await banLists.update((groups) => ({ groups: removeGroup(groups, String(id)) }));
     });
-    handle('banlists:plan', (id) => (groupId(id) ? banListPlan(id) : { ok: false, error: 'That ban list no longer exists.' }));
-    handle('banlists:sync', (id, fingerprint) =>
+    mainHandle('banlists:plan', (id) => (groupId(id) ? banListPlan(id) : { ok: false, error: 'That ban list no longer exists.' }));
+    mainHandle('banlists:sync', (id, fingerprint) =>
         groupId(id) && typeof fingerprint === 'string' && /^[0-9a-f]{16}$/.test(fingerprint)
             ? whileSyncing(() => banListSync(id, fingerprint))
             : { ok: false, error: 'Check the differences first, then confirm the sync.' },
     );
 
-    handle('brand', () => brand);
-    handle('server:refresh', (id) => clearCache(String(id)));
+    anyHandle('brand', () => brand);
+    mainHandle('server:refresh', (id) => clearCache(String(id)));
 
-    handle('activity:list', (id) => activity.list(id ? String(id) : null));
-    handle('preferences:get', () => preferences.get());
-    handle('preferences:set', async (changes) => {
+    mainHandle('activity:list', (id) => activity.list(id ? String(id) : null));
+    anyHandle('preferences:get', () => preferences.get());
+    mainHandle('preferences:set', async (changes) => {
         const allowed = [
             'refreshSeconds',
             'confirmActions',
@@ -799,45 +914,51 @@ function registerIpc() {
         }
 
         widgetWindows.forEach((window) => {
-            window.setOpacity(next.miniOpacity);
-            window.setAlwaysOnTop(next.miniAlwaysOnTop, 'screen-saver');
+            if (!window.isDestroyed()) {
+                window.setOpacity(next.miniOpacity);
+                window.setAlwaysOnTop(next.miniAlwaysOnTop, 'screen-saver');
+            }
         });
 
-        BrowserWindow.getAllWindows().forEach((window) => window.webContents.send('preferences:changed', next));
+        broadcast('preferences:changed', next);
 
         return next;
     });
-    handle('zoom:set', (factor) => zoomers.zoom?.(ZOOM_STEPS.includes(Number(factor)) ? Number(factor) : 1));
-    handle('limits', () => LIMITS);
-    handle('app:info', () => ({ version: app.getVersion(), dataPath: app.getPath('userData') }));
+    mainHandle('zoom:set', (factor) => zoomers.zoom?.(ZOOM_STEPS.includes(Number(factor)) ? Number(factor) : 1));
+    mainHandle('limits', () => LIMITS);
+    mainHandle('app:info', () => ({ version: app.getVersion(), dataPath: app.getPath('userData') }));
 
-    handle('widgets:open', (kind, id) => openWidget(String(kind), String(id)));
-    handle('widgets:list', () => openWidgets());
+    mainHandle('widgets:open', (kind, id) => openWidget(String(kind), String(id)));
+    mainHandle('widgets:list', () => openWidgets());
     // From the main window, a widget by ID; from a widget, itself.
-    ipcMain.handle('widgets:close', (event, id) => {
-        const window = id ? widgetWindows.get(String(id)) : BrowserWindow.fromWebContents(event.sender);
+    anyHandle('widgets:close', (event, id) => {
+        const widget = widgetFor(event);
+        const window = widget ? BrowserWindow.fromWebContents(event.sender) : id ? widgetWindows.get(String(id)) : null;
 
-        if (window && window !== mainWindow) {
+        if (window && window !== mainWindow && !window.isDestroyed()) {
             window.close();
         }
     });
-    handle('main:focus', () => showMain());
-    handle('external:open', (url) => openExternal(String(url)));
+    anyHandle('main:focus', () => showMain());
+    mainHandle('external:open', (url) => openExternal(String(url)));
 
     // The open theme's colours, for the next start's first frame. Written
     // only when they change, and not announced: nothing else reads them.
-    handle('boot:colors', async (input) => {
+    mainHandle('boot:colors', async (input) => {
         const colors = cleanBootColors(input);
 
         if (JSON.stringify(colors) !== JSON.stringify(prefs.bootColors)) {
             await savePreferences({ bootColors: colors });
-            mainWindow?.setBackgroundColor(colors.bg);
+
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.setBackgroundColor(colors.bg);
+            }
         }
     });
 
     // The main window's summary of its servers, for the tray icon.
     ipcMain.on('tray:summary', (event, input) => {
-        if (event.sender !== mainWindow?.webContents) {
+        if (!isMain(event)) {
             return;
         }
 

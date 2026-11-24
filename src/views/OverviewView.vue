@@ -32,8 +32,17 @@ const ranked = computed(() => [...(status.value?.factions ?? [])].sort((a, b) =>
 const lead = computed(() => (ranked.value.length > 1 ? ranked.value[0].score - ranked.value[1].score : 0));
 const peak = computed(() => Math.max(0, ...history.value.map((point) => point.players)));
 
+let loadSeq = 0;
+
 async function loadActivity(): Promise<void> {
-    activity.value = (await window.panel.activity.list(state.selectedId)).slice(0, 6);
+    const seq = ++loadSeq;
+    const list = (await window.panel.activity.list(state.selectedId)).slice(0, 6);
+
+    if (seq !== loadSeq) {
+        return;
+    }
+
+    activity.value = list;
 }
 
 onMounted(loadActivity);
@@ -173,7 +182,7 @@ function openPlayer(steamId: string): void {
                         <button type="button" class="link" @click="state.activityServer = state.selectedId; openView('activity')">All</button>
                     </header>
                     <div class="list">
-                        <div v-for="entry in activity" :key="entry.at + entry.summary" class="row activity" :title="entry.error ?? entry.summary">
+                        <div v-for="(entry, index) in activity" :key="`${entry.at}:${index}`" class="row activity" :title="entry.error ?? entry.summary">
                             <span class="dot" :class="entry.ok ? 'online' : 'offline'" />
                             <span class="truncate grow">{{ entry.summary }}</span>
                             <TimeAgo class="muted when" :at="entry.at" />

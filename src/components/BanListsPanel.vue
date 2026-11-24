@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { CircleCheck, Info, Link2, LoaderCircle, Pencil, Plus, RefreshCw, Search, ShieldBan, Trash2, TriangleAlert } from 'lucide-vue-next';
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
+import TimeAgo from '@/components/TimeAgo.vue';
 import { banLists, checkDifferences, describeDifferences, freeGroupName, groupOf, loadBanLists, openSyncPreview, removeBanList, saveBanList } from '@/lib/banlists';
-import { ago } from '@/lib/format';
-import { now, state } from '@/lib/store';
+import { state } from '@/lib/store';
 import type { BanGroup } from '@/types';
 
 /**
@@ -40,12 +40,36 @@ function toggleServer(group: BanGroup, serverId: string): void {
     saveBanList({ id: group.id, serverIds });
 }
 
-/** The other group a server is linked in, which keeps it out of this one. */
-function elsewhere(group: BanGroup, serverId: string): BanGroup | null {
-    const other = groupOf(serverId);
+const elsewhereByGroup = computed(() => {
+    const byGroup: Record<string, Record<string, BanGroup>> = {};
 
-    return other && other.id !== group.id ? other : null;
-}
+    for (const group of banLists.groups) {
+        const byServer: Record<string, BanGroup> = {};
+
+        for (const server of state.servers) {
+            const other = groupOf(server.id);
+
+            if (other && other.id !== group.id) {
+                byServer[server.id] = other;
+            }
+        }
+
+        byGroup[group.id] = byServer;
+    }
+
+    return byGroup;
+});
+
+const differenceByGroup = computed(() => {
+    const byGroup: Record<string, string | null> = {};
+
+    for (const group of banLists.groups) {
+        const plan = banLists.checks[group.id]?.plan;
+        byGroup[group.id] = plan ? describeDifferences(plan.missing, plan.lifting, plan.serversBehind) : null;
+    }
+
+    return byGroup;
+});
 
 const dot = (serverId: string) => (state.lives[serverId]?.online ? 'online' : state.lives[serverId] ? 'offline' : 'pending');
 </script>
@@ -98,7 +122,10 @@ const dot = (serverId: string) => (state.lives[serverId]?.online ? 'online' : st
                 </div>
                 <div class="stat">
                     <dt>Last sync</dt>
-                    <dd :class="{ muted: !group.lastSyncedAt }">{{ group.lastSyncedAt ? ago(group.lastSyncedAt, now) : 'Never' }}</dd>
+                    <dd :class="{ muted: !group.lastSyncedAt }">
+                        <TimeAgo v-if="group.lastSyncedAt" :at="group.lastSyncedAt" />
+                        <template v-else>Never</template>
+                    </dd>
                 </div>
             </dl>
 
@@ -107,11 +134,11 @@ const dot = (serverId: string) => (state.lives[serverId]?.online ? 'online' : st
                 <span class="num">{{ group.serverIds.length }}/{{ state.servers.length }}</span>
             </div>
             <div class="panel-flush servers">
-                <label v-for="server in state.servers" :key="server.id" class="server" :class="{ on: group.serverIds.includes(server.id), taken: elsewhere(group, server.id) }">
-                    <input type="checkbox" :checked="group.serverIds.includes(server.id)" :disabled="elsewhere(group, server.id) !== null" @change="toggleServer(group, server.id)" />
+                <label v-for="server in state.servers" :key="server.id" class="server" :class="{ on: group.serverIds.includes(server.id), taken: elsewhereByGroup[group.id]?.[server.id] }">
+                    <input type="checkbox" :checked="group.serverIds.includes(server.id)" :disabled="!!elsewhereByGroup[group.id]?.[server.id]" @change="toggleServer(group, server.id)" />
                     <span class="dot" :class="dot(server.id)" />
                     <span class="server-name truncate">{{ server.name }}</span>
-                    <span v-if="elsewhere(group, server.id)" class="muted where">In “{{ elsewhere(group, server.id)!.name }}”</span>
+                    <span v-if="elsewhereByGroup[group.id]?.[server.id]" class="muted where">In “{{ elsewhereByGroup[group.id][server.id].name }}”</span>
                     <span v-else-if="state.lives[server.id] && !state.lives[server.id]!.online" class="muted where">Offline</span>
                     <span class="mono muted address">{{ server.host }}:{{ server.port }}</span>
                 </label>
@@ -124,10 +151,10 @@ const dot = (serverId: string) => (state.lives[serverId]?.online ? 'online' : st
                 <p v-else-if="banLists.checks[group.id]?.error" class="field-error check"><TriangleAlert /> {{ banLists.checks[group.id]!.error }}</p>
                 <p v-else-if="banLists.checks[group.id]?.plan" class="check">
                     <template v-for="plan in [banLists.checks[group.id]!.plan!]" :key="plan.fingerprint">
-                        <TriangleAlert v-if="describeDifferences(plan.missing, plan.lifting, plan.serversBehind)" class="gold" />
+                        <TriangleAlert v-if="differenceByGroup[group.id]" class="gold" />
                         <CircleCheck v-else class="ok" />
                         <span>
-                            <span v-if="describeDifferences(plan.missing, plan.lifting, plan.serversBehind)" class="gold">{{ describeDifferences(plan.missing, plan.lifting, plan.serversBehind) }}.</span>
+                            <span v-if="differenceByGroup[group.id]" class="gold">{{ differenceByGroup[group.id] }}.</span>
                             <span v-else class="ok">All {{ plan.servers.length }} {{ plan.servers.length === 1 ? 'server that answered matches' : 'servers that answered match' }}.</span>
                             <span v-if="plan.skipped.length" class="muted"> Skipped: {{ plan.skipped.map((entry) => entry.serverName).join(', ') }}.</span>
                         </span>

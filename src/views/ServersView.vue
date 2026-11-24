@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { FlaskConical, Plus, SearchX, Server, Users } from 'lucide-vue-next';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import ServerCard from '@/components/ServerCard.vue';
 import SearchField from '@/components/SearchField.vue';
 import ViewHeader from '@/components/ViewHeader.vue';
@@ -25,11 +25,23 @@ const online = computed(() => state.servers.filter((server) => state.lives[serve
 /** The add card ends the grid, unless a filter or search is narrowing it down. */
 const showAddCard = computed(() => state.serverFilter === 'all' && !state.search);
 
+const addingDemo = ref(false);
+
 async function addDemo(): Promise<void> {
-    const server = await window.panel.servers.addDemo();
-    await loadServers();
-    selectServer(server.id, false);
-    toast('info', 'Demo server added', 'It plays a pretend match on this PC, so you can try every control safely.');
+    if (addingDemo.value) {
+        return;
+    }
+
+    addingDemo.value = true;
+
+    try {
+        const server = await window.panel.servers.addDemo();
+        await loadServers();
+        selectServer(server.id, false);
+        toast('info', 'Demo server added', 'It plays a pretend match on this PC, so you can try every control safely.');
+    } finally {
+        addingDemo.value = false;
+    }
 }
 </script>
 
@@ -70,7 +82,7 @@ async function addDemo(): Promise<void> {
                 <span class="plus"><Plus /></span>
                 <strong>Add a server</strong>
                 <span class="muted">Its RCON address and password</span>
-                <span v-if="!state.servers.some((server) => server.demo)" class="demo-link" @click.stop="addDemo"><FlaskConical /> or try the demo server</span>
+                <span v-if="!state.servers.some((server) => server.demo)" class="demo-link" :aria-disabled="addingDemo" @click.stop="addDemo"><FlaskConical /> or try the demo server</span>
             </button>
         </div>
 
@@ -207,6 +219,11 @@ async function addDemo(): Promise<void> {
 
 .demo-link:hover {
     color: var(--accent-hi);
+}
+
+.demo-link[aria-disabled='true'] {
+    pointer-events: none;
+    opacity: 0.5;
 }
 
 .demo-link svg {

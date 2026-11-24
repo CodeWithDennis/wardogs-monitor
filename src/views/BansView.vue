@@ -14,10 +14,22 @@ const form = reactive({ steamId: '', reason: '' });
 const formError = ref<string | null>(null);
 const steamIdInput = ref<HTMLInputElement | null>(null);
 
+let loadSeq = 0;
+
 async function load(): Promise<void> {
-    if (state.selectedId) {
-        answer.value = await window.panel.server.bans(state.selectedId);
+    const seq = ++loadSeq;
+
+    if (!state.selectedId) {
+        return;
     }
+
+    const result = await window.panel.server.bans(state.selectedId);
+
+    if (seq !== loadSeq) {
+        return;
+    }
+
+    answer.value = result;
 }
 
 onMounted(load);

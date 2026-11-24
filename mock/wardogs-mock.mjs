@@ -1,8 +1,18 @@
-import { createHash } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+
+const MAX_BODY_BYTES = 1024 * 1024;
+const MAX_MESSAGES = 100;
+
+function sameSecret(actual, expected) {
+    const a = Buffer.from(String(actual ?? ''), 'utf8');
+    const b = Buffer.from(String(expected), 'utf8');
+
+    return a.length === b.length && timingSafeEqual(a, b);
+}
 
 /**
  * A pretend Wardogs dedicated server that answers the RCON API with the
@@ -281,6 +291,11 @@ export async function startMockServer(options = {}) {
         }],
         ['POST', /^broadcast$/, (_, body) => {
             state.messages.push({ to: 'everyone', message: body?.message });
+
+            if (state.messages.length > MAX_MESSAGES) {
+                state.messages.splice(0, state.messages.length - MAX_MESSAGES);
+            }
+
             log(`broadcast: ${body?.message}`);
 
             return { message: 'Sent.' };
@@ -312,6 +327,10 @@ export async function startMockServer(options = {}) {
                 player.deaths += 1;
             } else {
                 state.messages.push({ to: player.name, message: body?.message });
+
+                if (state.messages.length > MAX_MESSAGES) {
+                    state.messages.splice(0, state.messages.length - MAX_MESSAGES);
+                }
             }
 
             log(`${verb} ${player.name}`, body ?? '');
@@ -335,20 +354,37 @@ export async function startMockServer(options = {}) {
         }],
     ];
 
+    const expectedAuth = `Bearer ${password}`;
+
     const server = createServer((request, response) => {
-        if (request.headers.authorization !== `Bearer ${password}`) {
+        if (!sameSecret(request.headers.authorization, expectedAuth)) {
             return json(response, 401, { error: 'unauthorized' });
         }
 
         const url = new URL(request.url ?? '/', 'http://localhost');
         const endpoint = url.pathname.replace(/^\/v1\//, '');
         let raw = '';
+        let bytes = 0;
+        let tooLarge = false;
 
         request.on('data', (chunk) => {
+            bytes += chunk.length;
+
+            if (bytes > MAX_BODY_BYTES) {
+                tooLarge = true;
+                json(response, 413, { error: 'Payload too large.' });
+                request.destroy();
+
+                return;
+            }
+
             raw += chunk;
         });
 
         request.on('end', () => {
+            if (tooLarge) {
+                return;
+            }
             if (request.method === 'PUT' && endpoint === 'config') {
                 const revision = String(request.headers['if-match'] ?? '').replace(/"/g, '');
 

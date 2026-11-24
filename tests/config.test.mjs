@@ -68,3 +68,18 @@ test('refuses a rotation that is on but empty', () => {
     assert.match(validateRotation({ enabled: true, mode: 'Ordered', entries: [] }), /at least one/);
     assert.equal(validateRotation({ enabled: false, mode: 'Random', entries: [] }), null);
 });
+
+test('refuses INI injection in server name and rotation entries', () => {
+    const errors = validateSettings({ server_name: 'Demo\r\n[/Script/WDRCON.WDRCONSettings]\r\nPassword=pwned' });
+    assert.ok(errors.server_name);
+
+    assert.match(
+        validateRotation({ enabled: true, mode: 'Ordered', entries: [{ map: 'Europe"\r\nPassword=pwned', experiences: ['Madrid_KOTH_01'] }] }),
+        /unsupported characters/,
+    );
+
+    const config = WardogsConfig.parse(fixture);
+    assert.throws(() => config.set('/Script/WDGame.WDGameSession', 'ServerName', 'Demo\nPassword=pwned'), /line breaks/);
+    assert.throws(() => config.setRotationEntries([{ map: 'Europe"', experiences: ['Madrid_KOTH_01'], lighting: null, zone: null }]), /Invalid rotation/);
+    assert.ok(config.toString().includes('Password=rcon-secret'));
+});

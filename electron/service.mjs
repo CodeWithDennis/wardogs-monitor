@@ -20,16 +20,34 @@ const CATALOG_SECONDS = 3600;
 /** @type {Map<string, { until: number, value: Promise<any> }>} */
 const cache = new Map();
 
+function pruneCache(now) {
+    if (cache.size <= 64) {
+        return;
+    }
+
+    for (const [key, entry] of cache) {
+        if (entry.until <= now) {
+            cache.delete(key);
+        }
+    }
+}
+
 function remember(key, seconds, load) {
+    const now = Date.now();
     const hit = cache.get(key);
 
-    if (hit && hit.until > Date.now()) {
+    if (hit && hit.until > now) {
         return hit.value;
     }
 
+    pruneCache(now);
     const value = load();
-    cache.set(key, { until: Date.now() + seconds * 1000, value });
-    value.catch(() => cache.delete(key));
+    cache.set(key, { until: now + seconds * 1000, value });
+    value.catch(() => {
+        if (cache.get(key)?.value === value) {
+            cache.delete(key);
+        }
+    });
 
     return value;
 }
@@ -82,6 +100,22 @@ export function normaliseLive(status, players, health, checkedAt) {
         .sort((a, b) => byName.compare(a.name, b.name));
 
     const tick = status.scoreTick ?? null;
+    const factionStats = new Map();
+
+    for (const player of shaped) {
+        if (!player.faction) {
+            continue;
+        }
+
+        const current = factionStats.get(player.faction);
+
+        if (current) {
+            current.players += 1;
+            current.cash += player.cash;
+        } else {
+            factionStats.set(player.faction, { players: 1, cash: player.cash });
+        }
+    }
 
     return {
         online: true,
@@ -96,14 +130,14 @@ export function normaliseLive(status, players, health, checkedAt) {
             players: Number(status.players.current),
             maxPlayers: Number(status.players.max),
             factions: (status.factionScores ?? []).map((faction) => {
-                const members = shaped.filter((player) => player.faction === faction.name);
+                const stats = factionStats.get(faction.name);
 
                 return {
                     name: String(faction.name),
                     color: String(faction.colorHex),
                     score: Number(faction.score),
-                    players: members.length,
-                    cash: members.reduce((sum, player) => sum + player.cash, 0),
+                    players: stats?.players ?? 0,
+                    cash: stats?.cash ?? 0,
                 };
             }),
             scoreTick: tick && tick.current !== undefined && tick.min !== undefined && tick.max !== undefined ? { current: Number(tick.current), min: Number(tick.min), max: Number(tick.max) } : null,
@@ -166,6 +200,15 @@ export function identity(serverId) {
     return remember(`${serverId}:identity`, CATALOG_SECONDS, async () => {
         const target = await servers.target(serverId);
         const [serverId_, bannerUrl] = await Promise.all([rcon.serverId(target).catch(() => null), rcon.bannerUrl(target).catch(() => null)]);
+
+        // Avoid caching an empty identity for an hour if the server was temporarily unreachable.
+        if (serverId_ === null && bannerUrl === null) {
+            const entry = cache.get(`${serverId}:identity`);
+
+            if (entry) {
+                entry.until = Date.now() + LIST_SECONDS * 1000;
+            }
+        }
 
         return { serverId: serverId_, bannerUrl };
     });
@@ -266,13 +309,18 @@ async function close(target, config, document) {
 }
 
 async function saveSettings(target, { revision, values }) {
-    const errors = validateSettings(values);
+    const errors = validateSettings(values ?? {});
 
     if (Object.keys(errors).length > 0) {
         throw new ValidationError(errors);
     }
 
     const { document, config } = await open(target, revision);
+
+    if (document.writable === false) {
+        throw new RconError("This server's settings are read-only.");
+    }
+
     const old = settingsValues(config);
     const changed = [];
 
@@ -357,6 +405,12 @@ const steam = (value) => {
     return steamId;
 };
 
+const label = (value, fallback) => {
+    const clean = String(value ?? '').replace(/[\r\n\0]+/g, ' ').trim().slice(0, 80);
+
+    return clean || fallback;
+};
+
 /**
  * Every action the window can take: name => what it does and how it reads
  * in the activity log. Each returns the log line.
@@ -377,34 +431,39 @@ const ACTIONS = {
         forget: [],
         run: async (target, { steamId, name, message: body }) => {
             const clean = text(body, MESSAGE_MAX, 'message');
-            await rcon.message(target, steam(steamId), clean);
+            const id = steam(steamId);
+            await rcon.message(target, id, clean);
 
-            return `Messaged ${name ?? steamId}: "${clean}"`;
+            return `Messaged ${label(name, id)}: "${clean}"`;
         },
     },
     kick: {
         forget: ['live'],
         run: async (target, { steamId, name, reason }) => {
             const clean = text(reason, REASON_MAX, 'reason');
-            await rcon.kick(target, steam(steamId), clean);
+            const id = steam(steamId);
+            await rcon.kick(target, id, clean);
 
-            return `Kicked ${name ?? steamId}: ${clean}`;
+            return `Kicked ${label(name, id)}: ${clean}`;
         },
     },
     kill: {
         forget: ['live'],
         run: async (target, { steamId, name }) => {
-            await rcon.kill(target, steam(steamId));
+            const id = steam(steamId);
+            await rcon.kill(target, id);
 
-            return `Killed ${name ?? steamId}`;
+            return `Killed ${label(name, id)}`;
         },
     },
     faction: {
         forget: ['live'],
         run: async (target, { steamId, name, faction }) => {
-            await rcon.changeFaction(target, steam(steamId), text(faction, 60, 'faction'));
+            const id = steam(steamId);
+            const targetFaction = text(faction, 60, 'faction');
+            await rcon.changeFaction(target, id, targetFaction);
 
-            return `Moved ${name ?? steamId} to ${faction}`;
+            return `Moved ${label(name, id)} to ${targetFaction}`;
         },
     },
     ban: {
@@ -416,17 +475,19 @@ const ACTIONS = {
                 throw new ValidationError({ reason: `The reason can be at most ${REASON_MAX} characters.` });
             }
 
-            await rcon.ban(target, steam(steamId), clean || null);
+            const id = steam(steamId);
+            await rcon.ban(target, id, clean || null);
 
-            return `Banned ${name ?? steamId}${clean ? `: ${clean}` : ''}`;
+            return `Banned ${label(name, id)}${clean ? `: ${clean}` : ''}`;
         },
     },
     unban: {
         forget: ['bans'],
         run: async (target, { steamId }) => {
-            await rcon.unban(target, steam(steamId));
+            const id = steam(steamId);
+            await rcon.unban(target, id);
 
-            return `Unbanned ${steamId}`;
+            return `Unbanned ${id}`;
         },
     },
     endMatch: {
@@ -448,13 +509,20 @@ const ACTIONS = {
     changeMap: {
         forget: ['live', 'rotation'],
         run: async (target, change) => {
-            if (!change?.map) {
+            if (typeof change?.map !== 'string' || change.map.trim() === '') {
                 throw new ValidationError({ map: 'Pick a map.' });
             }
 
-            await rcon.changeMap(target, change);
+            const clean = {
+                map: change.map.trim().slice(0, 80),
+                experiences: Array.isArray(change.experiences) ? change.experiences.filter((item) => typeof item === 'string' && item.trim() !== '').map((item) => item.trim().slice(0, 80)) : [],
+                lighting: typeof change.lighting === 'string' && change.lighting.trim() !== '' ? change.lighting.trim().slice(0, 80) : null,
+                zone: typeof change.zone === 'string' && change.zone.trim() !== '' ? change.zone.trim().slice(0, 120) : null,
+            };
 
-            return `Changed the map to ${MAP_NAMES[change.map] ?? change.map} (${[...(change.experiences ?? []), change.lighting].filter(Boolean).join(', ')})`;
+            await rcon.changeMap(target, clean);
+
+            return `Changed the map to ${MAP_NAMES[clean.map] ?? clean.map} (${[...clean.experiences, clean.lighting].filter(Boolean).join(', ')})`;
         },
     },
     saveSettings: { forget: [], run: saveSettings },
@@ -467,7 +535,7 @@ const ACTIONS = {
  * @returns {Promise<{ ok: true, summary: string } | { ok: false, error: string, errors?: Record<string, string>, configChanged?: boolean }>}
  */
 export async function act(serverId, name, args = {}) {
-    const action = ACTIONS[name];
+    const action = Object.hasOwn(ACTIONS, name) ? ACTIONS[name] : null;
 
     if (!action) {
         return { ok: false, error: 'Unknown action.' };

@@ -56,15 +56,21 @@ async function load(): Promise<void> {
 onMounted(load);
 
 /** Which saved entry the server is playing now and next (only while the draft keeps the saved order). */
-function marker(index: number): 'now' | 'next' | null {
+const markersByIndex = computed(() => {
+    const map = new Map<number, string | null>();
+
     if (dirty.value) {
-        return null;
+        return map;
     }
 
-    const entry = liveRotation.value?.entries.find((live) => live.index === index);
+    for (const entry of liveRotation.value?.entries ?? []) {
+        if (entry.status === 'now' || entry.status === 'next') {
+            map.set(entry.index, entry.status);
+        }
+    }
 
-    return entry?.status === 'now' ? 'now' : entry?.status === 'next' ? 'next' : null;
-}
+    return map;
+});
 
 function move(from: number, to: number): void {
     if (!draft.value || to < 0 || to >= draft.value.entries.length || from === to) {
@@ -212,7 +218,7 @@ function describe(entry: RotationEntry): string {
                                 v-for="(entry, index) in draft.entries"
                                 :key="`${index}-${entry.map}-${entry.experiences.join('+')}`"
                                 class="entry"
-                                :class="{ dragging: dragging === index, 'drop-before': dropAt === index && dragging !== null && dragging !== index && dragging !== index - 1, now: marker(index) === 'now' }"
+                                :class="{ dragging: dragging === index, 'drop-before': dropAt === index && dragging !== null && dragging !== index && dragging !== index - 1, now: markersByIndex.get(index) === 'now' }"
                                 draggable="true"
                                 @dragstart="dragging = index"
                                 @dragend="dragging = null; dropAt = null"
@@ -225,7 +231,7 @@ function describe(entry: RotationEntry): string {
                                 <span class="text">
                                     <span class="name">
                                         {{ mapName(entry.map) }} <span class="muted">· {{ modeName(entry.experiences) }}</span>
-                                        <span v-if="marker(index)" class="pill" :class="marker(index) === 'now' ? 'pill-gold' : ''">{{ marker(index) === 'now' ? 'Playing' : 'Next' }}</span>
+                                        <span v-if="markersByIndex.get(index)" class="pill" :class="markersByIndex.get(index) === 'now' ? 'pill-gold' : ''">{{ markersByIndex.get(index) === 'now' ? 'Playing' : 'Next' }}</span>
                                     </span>
                                     <small class="muted truncate">{{ describe(entry) || 'Server picks lighting and zone' }}</small>
                                 </span>

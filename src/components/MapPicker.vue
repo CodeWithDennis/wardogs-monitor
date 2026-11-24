@@ -28,8 +28,13 @@ watch(
         const keepMode = map.value.modes.some((entry) => entry.id === mode.value) ? mode.value : map.value.modes[0]?.id;
         const keepModifiers = modifiers.value.filter((id) => map.value?.modifiers.some((entry) => entry.id === id));
         const keepZone = map.value.zones.some((zone) => zone.id === value.value.zone) ? value.value.zone : null;
+        const experiences = [keepMode, ...keepModifiers].filter(Boolean) as string[];
 
-        value.value = { ...value.value, experiences: [keepMode, ...keepModifiers].filter(Boolean) as string[], zone: keepZone };
+        if (JSON.stringify(experiences) === JSON.stringify(value.value.experiences) && keepZone === value.value.zone) {
+            return;
+        }
+
+        value.value = { ...value.value, experiences, zone: keepZone };
     },
     { immediate: true },
 );

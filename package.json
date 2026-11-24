@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "mock": "node mock/wardogs-mock.mjs",
-    "build": "vue-tsc --noEmit && vite build",
+    "build": "vite build",
     "start": "npm run build && electron .",
     "dist": "npm run build && electron-builder --win --publish never",
     "typecheck": "vue-tsc --noEmit",
@@ -21,6 +21,7 @@
   "build": {
     "appId": "com.wardogsmonitor.app",
     "productName": "Wardogs Monitor",
+    "asar": true,
     "directories": {
       "output": "release"
     },
@@ -54,13 +55,14 @@
       "enableNodeOptionsEnvironmentVariable": false,
       "enableNodeCliInspectArguments": false,
       "enableEmbeddedAsarIntegrityValidation": true,
-      "onlyLoadAppFromAsar": true
+      "onlyLoadAppFromAsar": true,
+      "grantFileProtocolExtraPrivileges": false
     }
   },
   "devDependencies": {
     "@fontsource/inter": "^5.3.0",
     "@vitejs/plugin-vue": "^6.0.10",
-    "electron": "^44.11.5",
+    "electron": "44.11.5",
     "electron-builder": "^26.15.3",
     "lucide-vue-next": "^1.0.0",
     "typescript": "~5.9",

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Megaphone, RotateCcw, Send, SkipForward } from 'lucide-vue-next';
 import { onUnmounted, ref } from 'vue';
-import type { WidgetProps } from '@/types';
+import type { ActionName, WidgetProps } from '@/types';
 
 /**
  * The actions an admin reaches for mid-match, without opening the app:
@@ -18,6 +18,7 @@ const armed = ref<string | null>(null);
 const feedback = ref<{ ok: boolean; text: string } | null>(null);
 let disarm: ReturnType<typeof setTimeout> | undefined;
 let fade: ReturnType<typeof setTimeout> | undefined;
+let alive = true;
 
 /** The first click arms an action for a few seconds; the second runs it. */
 function ready(key: string): boolean {
@@ -35,7 +36,7 @@ function ready(key: string): boolean {
     return false;
 }
 
-async function run(key: string, name: string, args: Record<string, unknown> = {}): Promise<void> {
+async function run(key: string, name: ActionName, args: Record<string, unknown> = {}): Promise<void> {
     if (busy.value || !ready(key)) {
         return;
     }
@@ -51,8 +52,12 @@ async function run(key: string, name: string, args: Record<string, unknown> = {}
         }
     } finally {
         busy.value = false;
-        clearTimeout(fade);
-        fade = setTimeout(() => (feedback.value = null), 5000);
+
+        if (alive) {
+            clearTimeout(fade);
+            fade = setTimeout(() => (feedback.value = null), 5000);
+        }
+
         emit('refresh');
     }
 }
@@ -66,6 +71,7 @@ function sendTyped(): void {
 }
 
 onUnmounted(() => {
+    alive = false;
     clearTimeout(disarm);
     clearTimeout(fade);
 });
@@ -84,7 +90,7 @@ onUnmounted(() => {
 
         <div class="label">Broadcast</div>
         <div class="presets">
-            <button v-for="(text, index) in preferences.broadcasts" :key="index" type="button" class="preset" :class="{ armed: armed === `preset-${index}` }" :disabled="busy" :title="text" @click="run(`preset-${index}`, 'broadcast', { message: text })">
+            <button v-for="(text, index) in preferences.broadcasts" :key="`${index}:${text}`" type="button" class="preset" :class="{ armed: armed === `preset-${index}` }" :disabled="busy" :title="text" @click="run(`preset-${index}`, 'broadcast', { message: text })">
                 <Megaphone class="preset-icon" />
                 <span class="truncate">{{ armed === `preset-${index}` ? 'Click again to send' : text }}</span>
             </button>

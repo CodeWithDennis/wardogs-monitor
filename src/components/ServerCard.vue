@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ArrowRight, Ellipsis, Pencil, PictureInPicture2, Trash2, WifiOff } from 'lucide-vue-next';
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onUnmounted, ref, watch } from 'vue';
 import FactionScores from '@/components/FactionScores.vue';
 import MapArt from '@/components/MapArt.vue';
 import TimeAgo from '@/components/TimeAgo.vue';
@@ -49,7 +49,14 @@ function onDocument(event: MouseEvent): void {
     }
 }
 
-onMounted(() => document.addEventListener('mousedown', onDocument));
+watch(menu, (open) => {
+    if (open) {
+        document.addEventListener('mousedown', onDocument);
+    } else {
+        document.removeEventListener('mousedown', onDocument);
+    }
+});
+
 onUnmounted(() => document.removeEventListener('mousedown', onDocument));
 </script>
 

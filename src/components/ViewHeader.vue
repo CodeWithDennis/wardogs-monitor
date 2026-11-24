@@ -72,6 +72,7 @@ const tab = defineModel<string>('tab');
     font-weight: 700;
     letter-spacing: 0.06em;
     line-height: 1.15;
+    overflow-wrap: anywhere;
 }
 
 .subtitle {
@@ -172,10 +173,6 @@ const tab = defineModel<string>('tab');
 
 .text {
     min-width: 0;
-}
-
-.title {
-    overflow-wrap: anywhere;
 }
 
 /* A narrow page: less padding, a smaller title, and the actions wrap under it rather than squeeze it. */

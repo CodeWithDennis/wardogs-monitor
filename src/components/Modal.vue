@@ -1,27 +1,89 @@
 <script setup lang="ts">
 import { X } from 'lucide-vue-next';
-import { nextTick, ref, watch } from 'vue';
+import { nextTick, onUnmounted, ref, watch } from 'vue';
 
 /** A dialog over the window: Escape or the backdrop closes it. */
 const props = withDefaults(defineProps<{ open: boolean; title: string; width?: number }>(), { width: 440 });
 const emit = defineEmits<{ close: [] }>();
 const box = ref<HTMLElement | null>(null);
+let previousFocus: HTMLElement | null = null;
+
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function focusables(): HTMLElement[] {
+    return [...(box.value?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])].filter((el) => !el.hidden && el.offsetParent !== null);
+}
+
+function onKey(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+        event.preventDefault();
+        emit('close');
+
+        return;
+    }
+
+    if (event.key !== 'Tab') {
+        return;
+    }
+
+    const items = focusables();
+
+    if (items.length === 0) {
+        event.preventDefault();
+
+        return;
+    }
+
+    const first = items[0];
+    const last = items[items.length - 1];
+
+    if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+    }
+}
+
+function restoreFocus(): void {
+    if (previousFocus?.isConnected) {
+        previousFocus.focus();
+    }
+
+    previousFocus = null;
+}
 
 watch(
     () => props.open,
     async (open) => {
         if (open) {
+            previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+            window.addEventListener('keydown', onKey, true);
             await nextTick();
+
+            if (!props.open) {
+                return;
+            }
+
             (box.value?.querySelector('[autofocus], input, textarea, select, .btn-primary') as HTMLElement | null)?.focus();
+        } else {
+            window.removeEventListener('keydown', onKey, true);
+            restoreFocus();
         }
     },
 );
+
+onUnmounted(() => {
+    window.removeEventListener('keydown', onKey, true);
+    restoreFocus();
+});
 </script>
 
 <template>
     <Teleport to="body">
         <Transition name="fade">
-            <div v-if="open" class="backdrop" @mousedown.self="emit('close')" @keydown.esc="emit('close')">
+            <div v-if="open" class="backdrop" @mousedown.self="emit('close')">
                 <section ref="box" class="modal" role="dialog" aria-modal="true" :aria-label="title" :style="{ '--modal-w': `${width}px` }">
                     <header>
                         <h3 class="title">{{ title }}</h3>

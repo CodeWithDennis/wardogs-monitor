@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Activity, FlaskConical, Gavel, Plus, Swords } from 'lucide-vue-next';
+import { ref } from 'vue';
 import BrandMark from '@/components/BrandMark.vue';
 import { BRAND, WORDMARK } from '@/lib/brand';
 import { loadServers, selectServer, state, toast } from '@/lib/store';
@@ -11,11 +12,23 @@ const FEATURES = [
     { icon: Swords, title: 'The match', text: 'Maps, rotation and every server setting' },
 ];
 
+const addingDemo = ref(false);
+
 async function addDemo(): Promise<void> {
-    const server = await window.panel.servers.addDemo();
-    await loadServers();
-    selectServer(server.id);
-    toast('info', 'Demo server added', 'It plays a pretend match on this PC, so you can try every control safely.');
+    if (addingDemo.value) {
+        return;
+    }
+
+    addingDemo.value = true;
+
+    try {
+        const server = await window.panel.servers.addDemo();
+        await loadServers();
+        selectServer(server.id);
+        toast('info', 'Demo server added', 'It plays a pretend match on this PC, so you can try every control safely.');
+    } finally {
+        addingDemo.value = false;
+    }
 }
 </script>
 
@@ -38,7 +51,7 @@ async function addDemo(): Promise<void> {
 
             <div class="actions">
                 <button type="button" class="btn btn-primary btn-lg" @click="state.addingServer = true"><Plus /> Add your server</button>
-                <button type="button" class="btn btn-lg" @click="addDemo"><FlaskConical /> Try the demo server</button>
+                <button type="button" class="btn btn-lg" :disabled="addingDemo" @click="addDemo"><FlaskConical /> Try the demo server</button>
             </div>
             <p class="hint">Adding a server takes its RCON address and password. The demo plays a pretend match on this PC.</p>
         </div>

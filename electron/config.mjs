@@ -52,6 +52,20 @@ export const FIELDS = {
     overpopulated_team_threshold: [TEAM_BALANCE, 'OverpopulatedTeamThresholdConfig', 'int'],
 };
 
+const CONTROL_LINE = /[\r\n\0]/;
+const ROTATION_UNSAFE = /[\r\n\0"(),+]/;
+
+/** Prevent INI section/key injection via line breaks or NUL bytes. */
+function assertSingleLine(value, label = 'value') {
+    const text = String(value);
+
+    if (CONTROL_LINE.test(text)) {
+        throw new Error(`Invalid ${label}: line breaks are not allowed in server config.`);
+    }
+
+    return text;
+}
+
 export class WardogsConfig {
     /**
      * @param {string[]} lines without line endings
@@ -104,7 +118,7 @@ export class WardogsConfig {
      * (the section is added when the document lacks it).
      */
     set(section, key, value) {
-        const line = `${key}=${value}`;
+        const line = `${assertSingleLine(key, 'key')}=${assertSingleLine(value, key)}`;
         const index = this.findKey(section, key);
 
         if (index !== null) {
@@ -154,7 +168,10 @@ export class WardogsConfig {
             this.lines.splice(index, 1);
         }
 
-        this.lines.splice(position ?? this.endOfSection(section), 0, `!${key}=ClearArray`, ...values.map((value) => `.${key}=${value}`));
+        const cleanKey = assertSingleLine(key, 'key');
+        const cleanValues = values.map((value) => assertSingleLine(value, cleanKey));
+
+        this.lines.splice(position ?? this.endOfSection(section), 0, `!${cleanKey}=ClearArray`, ...cleanValues.map((value) => `.${cleanKey}=${value}`));
     }
 
     /**
@@ -184,11 +201,26 @@ export class WardogsConfig {
     /** @param {{ map: string, experiences: string[], lighting: string | null, zone: string | null }[]} entries */
     setRotationEntries(entries) {
         this.setArray(ROTATION, 'RotationEntries', entries.map((entry) => {
+            const safe = (value, label) => {
+                if (value === null || value === undefined || value === '') {
+                    return null;
+                }
+
+                const text = String(value);
+
+                if (ROTATION_UNSAFE.test(text)) {
+                    throw new Error(`Invalid rotation ${label}.`);
+                }
+
+                return text;
+            };
+
+            const experiences = (entry.experiences ?? []).map((item) => safe(item, 'experience')).filter(Boolean);
             const fields = [
-                ['Map', entry.map],
-                [entry.experiences.length === 1 ? 'Experience' : 'Experiences', entry.experiences.join('+')],
-                ['Lighting', entry.lighting],
-                ['ZoneAlternator', entry.zone],
+                ['Map', safe(entry.map, 'map')],
+                [experiences.length === 1 ? 'Experience' : 'Experiences', experiences.join('+')],
+                ['Lighting', safe(entry.lighting, 'lighting')],
+                ['ZoneAlternator', safe(entry.zone, 'zone')],
             ];
 
             return `(${fields.filter(([, value]) => value !== null && value !== '').map(([name, value]) => `${name}="${value}"`).join(',')})`;
@@ -302,9 +334,15 @@ export function writeField(config, field, value) {
     } else if (type === 'int') {
         config.set(section, key, String(Math.trunc(Number(value) || 0)));
     } else if (type === 'quoted') {
-        config.set(section, key, `"${value}"`);
+        const text = assertSingleLine(value, field);
+
+        if (text.includes('"')) {
+            throw new Error(`Invalid ${field}: quotes are not allowed.`);
+        }
+
+        config.set(section, key, `"${text}"`);
     } else {
-        config.set(section, key, String(value));
+        config.set(section, key, assertSingleLine(value, field));
     }
 }
 
@@ -360,11 +398,11 @@ export function validateSettings(values) {
     between('min_cash', 0, LIMITS.cashMax, 'Minimum cash');
     between('max_cash', 0, LIMITS.cashMax, 'Maximum cash');
 
-    if (typeof values.server_password === 'string' && (values.server_password.length > LIMITS.passwordMax || /[\s"]/.test(values.server_password))) {
+    if (typeof values.server_password === 'string' && (values.server_password.length > LIMITS.passwordMax || /[\s"\0]/.test(values.server_password))) {
         errors.server_password = `The join password can be at most ${LIMITS.passwordMax} characters, without spaces or quotes.`;
     }
 
-    if (typeof values.image_url === 'string' && values.image_url !== '' && !/^https:\/\/[^\s"]+$/.test(values.image_url)) {
+    if (typeof values.image_url === 'string' && values.image_url !== '' && !/^https:\/\/[^\s"\0]+$/.test(values.image_url)) {
         errors.image_url = 'The banner must be an https:// link.';
     }
 
@@ -384,19 +422,23 @@ export function validateSettings(values) {
         }
     }
 
-    if (typeof values.server_name === 'string' && (values.server_name.trim() === '' || values.server_name.length > 100)) {
-        errors.server_name = 'The server name must be 1 to 100 characters.';
+    if (typeof values.server_name === 'string' && (values.server_name.trim() === '' || values.server_name.length > 100 || CONTROL_LINE.test(values.server_name))) {
+        errors.server_name = 'The server name must be 1 to 100 characters on a single line.';
     }
 
     return errors;
 }
 
 /**
- * @param {{ enabled: boolean, mode: string, entries: { map: string, experiences: string[] }[] }} rotation
+ * @param {{ enabled: boolean, mode: string, entries: { map: string, experiences: string[], lighting?: string | null, zone?: string | null }[] }} rotation
  */
 export function validateRotation(rotation) {
-    if (!LIMITS.rotationModes.includes(rotation.mode)) {
+    if (!LIMITS.rotationModes.includes(rotation?.mode)) {
         return 'Pick ordered or random.';
+    }
+
+    if (!Array.isArray(rotation?.entries)) {
+        return 'Add at least one match, or turn the rotation off.';
     }
 
     if (rotation.entries.length > LIMITS.maxRotationEntries) {
@@ -407,8 +449,18 @@ export function validateRotation(rotation) {
         return 'Add at least one match, or turn the rotation off.';
     }
 
-    if (rotation.entries.some((entry) => !entry.map || entry.experiences.length === 0)) {
-        return 'Every match needs a map and a game mode.';
+    for (const entry of rotation.entries) {
+        if (!entry || typeof entry.map !== 'string' || entry.map.trim() === '' || !Array.isArray(entry.experiences) || entry.experiences.length === 0) {
+            return 'Every match needs a map and a game mode.';
+        }
+
+        if (ROTATION_UNSAFE.test(entry.map) || entry.experiences.some((item) => typeof item !== 'string' || item.trim() === '' || ROTATION_UNSAFE.test(item))) {
+            return 'A rotation entry contains unsupported characters.';
+        }
+
+        if ((entry.lighting != null && (typeof entry.lighting !== 'string' || ROTATION_UNSAFE.test(entry.lighting))) || (entry.zone != null && (typeof entry.zone !== 'string' || ROTATION_UNSAFE.test(entry.zone)))) {
+            return 'A rotation entry contains unsupported characters.';
+        }
     }
 
     return null;
