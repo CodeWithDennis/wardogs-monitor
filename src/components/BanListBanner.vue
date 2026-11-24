@@ -2,7 +2,6 @@
 import { Link2, X } from 'lucide-vue-next';
 import { computed } from 'vue';
 import { banLists, openSyncPreview, startupDifferences } from '@/lib/banlists';
-import { state } from '@/lib/store';
 
 /**
  * A strip above the page when the linked ban lists differed at start-up.
@@ -38,8 +37,7 @@ function review(): void {
 /*
  * When it runs to the window's right edge (.clear), Windows draws its own
  * minimise, maximise and close buttons over its end, so it keeps that
- * corner clear, like the licence banner (--caption-clear is set on
- * .content in Shell.vue).
+ * corner clear (--caption-clear is set on .content in Shell.vue).
  */
 .banner {
     display: flex;

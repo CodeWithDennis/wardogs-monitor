@@ -3,7 +3,7 @@ import { Ban, CircleCheck, CircleOff, Gauge, LayoutGrid, Map, Megaphone, Picture
 import { computed, onMounted, ref, watch } from 'vue';
 import ServerSwitcher from '@/components/ServerSwitcher.vue';
 import { BRAND, WORDMARK } from '@/lib/brand';
-import { openOptions, openView, section, selectedLive, state, VIEWS, type ControlView } from '@/lib/store';
+import { openView, section, selectedLive, state, VIEWS, type ControlView } from '@/lib/store';
 import { pickWidgets, widgetCount } from '@/lib/widgets';
 
 /**
@@ -73,19 +73,6 @@ const filters = computed(() => [
     { id: 'online' as const, label: 'Online', icon: CircleCheck, count: online.value },
     { id: 'offline' as const, label: 'Offline', icon: CircleOff, count: offline.value },
 ]);
-
-/** The licence in a few words, for the pill. */
-const licenceText = computed(() => {
-    const licence = state.licence;
-
-    if (!licence) {
-        return '';
-    }
-
-    return licence.state === 'licensed' ? 'Licensed' : licence.state === 'trial' ? `Trial · ${licence.trialDaysLeft}d left` : licence.reason === 'trial' ? 'Trial ended' : licence.reason === 'offline' ? 'Check needed' : 'Licence ended';
-});
-
-const licenceTone = computed(() => (state.licence?.state === 'licensed' ? 'ok' : state.licence?.state === 'trial' ? 'gold' : 'bad'));
 
 function broadcast(): void {
     state.broadcasting = true;
@@ -182,9 +169,6 @@ function playersOnline(serverId: string): string {
 
         <footer class="foot">
             <span>Version {{ state.version }}</span>
-            <button v-if="state.licence" type="button" class="pill licence" :class="`pill-${licenceTone}`" title="Licence" @click="openOptions('licence')">
-                {{ licenceText }}
-            </button>
         </footer>
     </aside>
 </template>
@@ -321,11 +305,6 @@ function playersOnline(serverId: string): string {
     color: var(--text-2);
     font-size: 14px;
     white-space: nowrap;
-}
-
-.licence {
-    border: 0;
-    cursor: pointer;
 }
 
 .beta {

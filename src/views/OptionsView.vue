@@ -25,7 +25,6 @@ import {
 } from 'lucide-vue-next';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import BanListsPanel from '@/components/BanListsPanel.vue';
-import LicencePanel from '@/components/LicencePanel.vue';
 import MapArt from '@/components/MapArt.vue';
 import ViewHeader from '@/components/ViewHeader.vue';
 import { banLists } from '@/lib/banlists';
@@ -38,12 +37,11 @@ import type { Preferences } from '@/types';
 
 /**
  * How the app looks and behaves, broadcasts and shortcuts, all as cards on
- * General; the licence, the watchlist, saved servers and linked ban lists
- * each have a tab of their own.
+ * General; the watchlist, saved servers and linked ban lists each have a
+ * tab of their own.
  */
 const tabs = computed(() => [
     { id: 'general', label: 'General' },
-    { id: 'licence', label: 'Licence' },
     { id: 'watchlist', label: 'Watchlist', count: state.preferences.watchlist.length },
     { id: 'servers', label: 'Servers', count: state.servers.length },
     { id: 'banlists', label: 'Ban lists', count: banLists.groups.length },
@@ -374,8 +372,6 @@ const SHORTCUTS = [
                 <p class="mono path">{{ dataPath }}</p>
             </section>
         </div>
-
-        <LicencePanel v-else-if="tab === 'licence'" />
 
         <section v-else-if="tab === 'watchlist'" class="card panel">
             <header class="panel-head">

@@ -39,13 +39,6 @@ contextBridge.exposeInMainWorld('panel', {
         plan: invoke('banlists:plan'),
         sync: invoke('banlists:sync'),
     },
-    license: {
-        status: invoke('license:status'),
-        activate: invoke('license:activate'),
-        check: invoke('license:check'),
-        remove: invoke('license:remove'),
-        onChange: listen('license:changed'),
-    },
     preferences: {
         get: invoke('preferences:get'),
         set: invoke('preferences:set'),
@@ -67,6 +60,5 @@ contextBridge.exposeInMainWorld('panel', {
         /** Fire and forget: sent after readings change, nothing to wait for. */
         summary: (value) => ipcRenderer.send('tray:summary', value),
         onOpenServer: listen('tray:open-server'),
-        onOpenLicence: listen('tray:open-licence'),
     },
 });

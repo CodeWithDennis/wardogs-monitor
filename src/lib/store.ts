@@ -1,5 +1,5 @@
 import { computed, markRaw, reactive, ref, watch } from 'vue';
-import type { ActionResult, LicenceStatus, Limits, Live, OpenWidget, Player, Preferences, SavedServer } from '@/types';
+import type { ActionResult, Limits, Live, OpenWidget, Player, Preferences, SavedServer } from '@/types';
 
 /** A player who was on a server and is gone now, kept so they can still be banned or watched. */
 export interface LeftPlayer {
@@ -103,7 +103,6 @@ export const state = reactive({
     paletteOpen: false,
     /** The broadcast dialog is open (for the selected server). */
     broadcasting: false,
-    licence: null as LicenceStatus | null,
     /** The Players view's tab: all, a faction, watched or left. */
     playersTab: 'all',
     /** The players table's sort: which column, and which way. */
@@ -262,7 +261,7 @@ function shareUnchanged(previous: Live | undefined, next: Live): Live {
 function noticeChanges(serverId: string, previous: Live | undefined, live: Live): void {
     const server = state.servers.find((entry) => entry.id === serverId);
 
-    if (!server || !previous || live.locked || previous.locked) {
+    if (!server || !previous) {
         return;
     }
 
@@ -438,16 +437,8 @@ export async function removeServer(server: SavedServer): Promise<void> {
 }
 
 export async function init(): Promise<void> {
-    const [preferences, limits, info, licence] = await Promise.all([window.panel.preferences.get(), window.panel.limits(), window.panel.appInfo(), window.panel.license.status()]);
+    const [preferences, limits, info] = await Promise.all([window.panel.preferences.get(), window.panel.limits(), window.panel.appInfo()]);
     state.preferences = preferences;
-    state.licence = licence;
-    window.panel.license.onChange((next) => {
-        state.licence = next;
-
-        for (const server of state.servers) {
-            refreshLive(server.id, true);
-        }
-    });
     state.limits = limits;
     state.version = info.version;
     await loadServers();

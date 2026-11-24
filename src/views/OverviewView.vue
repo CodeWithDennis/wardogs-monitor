@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Activity, Clock, History, LoaderCircle, Lock, Megaphone, RotateCcw, Send, SkipForward, Swords, Trophy, Users, WifiOff } from 'lucide-vue-next';
+import { Activity, Clock, History, LoaderCircle, Megaphone, RotateCcw, Send, SkipForward, Swords, Trophy, Users, WifiOff } from 'lucide-vue-next';
 import { computed, onMounted, ref, watch } from 'vue';
 import FactionScores from '@/components/FactionScores.vue';
 import MapArt from '@/components/MapArt.vue';
@@ -7,7 +7,6 @@ import PlayerChart from '@/components/PlayerChart.vue';
 import TimeAgo from '@/components/TimeAgo.vue';
 import ViewHeader from '@/components/ViewHeader.vue';
 import { formatUptime, gameName, modeName, percent, ratio, zoneName } from '@/lib/format';
-import { BILLING_URL, openBilling } from '@/lib/licence';
 import { mapName } from '@/lib/maps';
 import { openPlayerMenu } from '@/lib/playerActions';
 import { act, busy, openOptions, openView, selectedLive, selectedServer, state } from '@/lib/store';
@@ -73,7 +72,6 @@ function openPlayer(steamId: string): void {
                 <span class="live" :class="{ updating: state.loading[state.selectedId ?? ''] }"><span class="dot online" /> Live</span>
                 · {{ mapName(status.map) }} · {{ modeName(status.experiences) }} · up {{ formatUptime(live.uptimeSeconds ?? 0) }}
             </template>
-            <template v-else-if="live?.locked">Locked</template>
             <template v-else-if="live">Offline · checked <TimeAgo :at="live.checkedAt" /></template>
             <template v-else>Connecting…</template>
         </template>
@@ -81,11 +79,10 @@ function openPlayer(steamId: string): void {
 
     <div class="view-body">
         <div v-if="live && !live.online" class="card offline">
-            <component :is="live.locked ? Lock : WifiOff" />
+            <WifiOff />
             <div>
-                <strong>{{ live.locked ? 'This server is locked' : 'The server is not answering' }}</strong>
+                <strong>The server is not answering</strong>
                 <p>{{ live.error }}</p>
-                <button v-if="live.lockedBy === 'plan' && BILLING_URL" type="button" class="btn btn-primary btn-sm" @click="openBilling">Upgrade</button>
             </div>
         </div>
 
@@ -590,9 +587,5 @@ button.tile:hover {
 .offline p {
     margin: 4.5px 0 0;
     color: var(--text-2);
-}
-
-.offline .btn {
-    margin-top: 12px;
 }
 </style>

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue';
 import Modal from '@/components/Modal.vue';
-import { BILLING_URL, canAddServer, openBilling, planLimitMessage } from '@/lib/licence';
 import { loadServers, refreshLive, selectServer, state, toast } from '@/lib/store';
 
 /**
@@ -16,18 +15,12 @@ const saving = ref(false);
 const editing = computed(() => state.editingServer);
 const open = computed(() => state.addingServer || editing.value !== null);
 
-/** A new server that does not fit the plan: say so instead of connecting. */
-const limitError = ref<string | null>(null);
-const limitMessage = computed(() => limitError.value ?? (state.licence ? planLimitMessage(state.licence, 'add') : ''));
-const blocked = computed(() => !editing.value && (limitError.value !== null || !canAddServer.value));
-
 watch(open, (isOpen) => {
     if (!isOpen) {
         return;
     }
 
     error.value = null;
-    limitError.value = null;
     Object.assign(form, editing.value ? { name: editing.value.name, host: editing.value.host, port: String(editing.value.port), password: '' } : { name: '', host: '', port: '', password: '' });
 });
 
@@ -61,8 +54,7 @@ async function save(): Promise<void> {
         });
 
         if (!result.ok) {
-            limitError.value = result.limit ? result.error : null;
-            error.value = result.limit ? null : result.error;
+            error.value = result.error;
 
             return;
         }
@@ -88,11 +80,7 @@ async function addDemo(): Promise<void> {
 
 <template>
     <Modal :open="open" :title="editing ? `Edit ${editing.name}` : 'Add a server'" :width="460" @close="close">
-        <div v-if="blocked" class="form">
-            <p class="field-error" role="alert">{{ limitMessage }}</p>
-        </div>
-
-        <form v-else class="form" @submit.prevent="save">
+        <form class="form" @submit.prevent="save">
             <p class="intro muted">
                 Use the RCON address from your host's panel (on BisectHosting, the panel's IP and port) and the RCON password from <span class="mono">ServerSettings.ini</span>.
             </p>
@@ -127,8 +115,7 @@ async function addDemo(): Promise<void> {
         <template #footer>
             <button v-if="!editing && !state.servers.some((server) => server.demo)" type="button" class="btn btn-ghost demo" @click="addDemo">Try the demo server</button>
             <button type="button" class="btn btn-ghost" @click="close">Cancel</button>
-            <button v-if="blocked" type="button" class="btn btn-primary" :disabled="!BILLING_URL" @click="openBilling">Upgrade</button>
-            <button v-else type="button" class="btn btn-primary" :disabled="saving || !form.host || !form.port" @click="save">
+            <button type="button" class="btn btn-primary" :disabled="saving || !form.host || !form.port" @click="save">
                 {{ saving ? 'Connecting…' : editing ? 'Save' : 'Connect and add' }}
             </button>
         </template>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { LoaderCircle, Lock, Map as MapIcon, RotateCcw, SkipForward, Swords, WifiOff } from 'lucide-vue-next';
+import { LoaderCircle, Map as MapIcon, RotateCcw, SkipForward, Swords, WifiOff } from 'lucide-vue-next';
 import { computed, onMounted, ref } from 'vue';
 import MapArt from '@/components/MapArt.vue';
 import MapPicker from '@/components/MapPicker.vue';
@@ -98,11 +98,11 @@ function changeMap(): void {
             <section v-else class="card panel">
                 <header class="panel-head">
                     <span class="panel-title"><span class="panel-icon"><Swords /></span> Playing now</span>
-                    <span class="panel-aside">{{ live.locked ? 'Locked' : live.online ? 'Waiting' : 'Offline' }}</span>
+                    <span class="panel-aside">{{ live.online ? 'Waiting' : 'Offline' }}</span>
                 </header>
                 <div class="empty">
-                    <component :is="live.locked ? Lock : live.online ? LoaderCircle : WifiOff" :class="{ spin: live.online && !live.locked }" />
-                    <strong>{{ live.locked ? 'This server is locked' : live.online ? 'No match reading yet' : 'The server is not answering' }}</strong>
+                    <component :is="live.online ? LoaderCircle : WifiOff" :class="{ spin: live.online }" />
+                    <strong>{{ live.online ? 'No match reading yet' : 'The server is not answering' }}</strong>
                     <span v-if="live.error">{{ live.error }}</span>
                 </div>
             </section>

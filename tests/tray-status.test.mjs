@@ -32,7 +32,7 @@ test('a summary from the window is kept to its shape', () => {
 test('a server in the menu says how it is doing, with & kept literal', () => {
     assert.equal(serverLabel(summary.servers[0]), 'Alpha  ·  60/64 players');
     assert.equal(serverLabel(summary.servers[2]), 'Charlie  ·  offline');
-    assert.equal(serverLabel({ id: 'd', name: 'Rock & Roll', state: 'locked', players: 0, maxPlayers: 0 }), 'Rock && Roll  ·  locked');
+    assert.equal(serverLabel({ id: 'd', name: 'Rock & Roll', state: 'unknown', players: 0, maxPlayers: 0 }), 'Rock && Roll  ·  checking…');
 });
 
 test('the tooltip never passes the 127 characters Windows allows', () => {
