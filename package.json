@@ -60,7 +60,7 @@
   "devDependencies": {
     "@fontsource/inter": "^5.3.0",
     "@vitejs/plugin-vue": "^6.0.10",
-    "electron": "^44.9.0",
+    "electron": "^44.11.5",
     "electron-builder": "^26.15.3",
     "lucide-vue-next": "^1.0.0",
     "typescript": "~5.9",
@@ -68,8 +68,16 @@
     "vue": "^3.5.44",
     "vue-tsc": "^3.3.13"
   },
+  "overrides": {
+    "app-builder-lib": {
+      "minimatch": "^11.0.9"
+    },
+    "@electron/universal": {
+      "minimatch": "^11.0.9"
+    }
+  },
   "allowScripts": {
-    "electron@44.9.0": true
+    "electron@44.11.5": true
   },
   "repository": {
     "type": "git",
