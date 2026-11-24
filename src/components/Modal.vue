@@ -1,3 +1,8 @@
+<script lang="ts">
+/** Tracks open modals in stacking order so Escape and Tab apply only to the topmost dialog. */
+const modalStack: Array<(event: KeyboardEvent) => void> = [];
+</script>
+
 <script setup lang="ts">
 import { X } from 'lucide-vue-next';
 import { nextTick, onUnmounted, ref, watch } from 'vue';
@@ -15,14 +20,20 @@ function focusables(): HTMLElement[] {
 }
 
 function onKey(event: KeyboardEvent): void {
+    // Only the topmost modal responds, and never while the higher command palette is open.
+    if (modalStack[modalStack.length - 1] !== onKey || document.querySelector('.palette')) {
+        return;
+    }
+
     if (event.key === 'Escape') {
         event.preventDefault();
+        event.stopImmediatePropagation();
         emit('close');
 
         return;
     }
 
-    if (event.key !== 'Tab') {
+    if (event.key !== 'Tab' || !box.value?.contains(event.target as Node)) {
         return;
     }
 
@@ -46,6 +57,27 @@ function onKey(event: KeyboardEvent): void {
     }
 }
 
+function attach(): void {
+    const index = modalStack.indexOf(onKey);
+
+    if (index !== -1) {
+        modalStack.splice(index, 1);
+    }
+
+    modalStack.push(onKey);
+    window.addEventListener('keydown', onKey, true);
+}
+
+function detach(): void {
+    const index = modalStack.indexOf(onKey);
+
+    if (index !== -1) {
+        modalStack.splice(index, 1);
+    }
+
+    window.removeEventListener('keydown', onKey, true);
+}
+
 function restoreFocus(): void {
     if (previousFocus?.isConnected) {
         previousFocus.focus();
@@ -59,7 +91,7 @@ watch(
     async (open) => {
         if (open) {
             previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-            window.addEventListener('keydown', onKey, true);
+            attach();
             await nextTick();
 
             if (!props.open) {
@@ -68,14 +100,14 @@ watch(
 
             (box.value?.querySelector('[autofocus], input, textarea, select, .btn-primary') as HTMLElement | null)?.focus();
         } else {
-            window.removeEventListener('keydown', onKey, true);
+            detach();
             restoreFocus();
         }
     },
 );
 
 onUnmounted(() => {
-    window.removeEventListener('keydown', onKey, true);
+    detach();
     restoreFocus();
 });
 </script>
