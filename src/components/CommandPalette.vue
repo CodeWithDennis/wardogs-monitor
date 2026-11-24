@@ -92,10 +92,10 @@ const servers = computed<Item[]>(() =>
 
 const views = computed<Item[]>(() => {
     const go = (view: View, label: string, icon: unknown, keywords = '') => ({ id: `view:${view}`, group: 'Go to', label, icon, keywords: `${label} ${keywords}`, run: () => openView(view) });
-    const list: Item[] = [go('servers', 'All servers', LayoutGrid, 'cards home'), go('activity', 'Activity', ScrollText, 'log history')];
+    const items: Item[] = [go('servers', 'All servers', LayoutGrid, 'cards home'), go('activity', 'Activity', ScrollText, 'log history')];
 
     if (selectedServer.value) {
-        list.unshift(
+        items.unshift(
             go('overview', 'Overview', Gauge, 'scores dashboard'),
             go('players', 'Players', Users, 'scoreboard'),
             go('match', 'Match and map', MapIcon, 'change map travel'),
@@ -105,21 +105,21 @@ const views = computed<Item[]>(() => {
         );
     }
 
-    list.push(
+    items.push(
         { id: 'options', group: 'Go to', label: 'Options', icon: Settings2, keywords: 'options preferences', run: () => openOptions() },
         { id: 'themes', group: 'Go to', label: 'Themes and zoom', icon: Palette, keywords: 'theme appearance accent colour color zoom carbon', run: () => openOptions('appearance') },
         { id: 'watchlist', group: 'Go to', label: 'Watchlist', icon: Star, keywords: 'watch watched star', run: () => openOptions('watchlist') },
     );
 
-    return list;
+    return items;
 });
 
 const actions = computed<Item[]>(() => {
-    const list: Item[] = [{ id: 'add', group: 'Actions', label: 'Add a server', icon: Plus, keywords: 'add new server connect', run: () => (state.addingServer = true) }];
+    const items: Item[] = [{ id: 'add', group: 'Actions', label: 'Add a server', icon: Plus, keywords: 'add new server connect', run: () => (state.addingServer = true) }];
 
     if (selectedServer.value && state.lives[selectedServer.value.id]?.online) {
         const name = selectedServer.value.name;
-        list.unshift(
+        items.unshift(
             {
                 id: 'broadcast',
                 group: 'Actions',
@@ -149,7 +149,7 @@ const actions = computed<Item[]>(() => {
         );
     }
 
-    return list;
+    return items;
 });
 
 const haystack = (item: Item): string => (item.haystack ??= `${item.label} ${item.keywords}`.toLowerCase());

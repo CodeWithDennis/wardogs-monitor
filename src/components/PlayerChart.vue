@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, useId } from 'vue';
 import { time } from '@/lib/format';
 
 /**
@@ -11,6 +11,7 @@ const props = defineProps<{ points: { at: number; players: number }[]; max: numb
 const WIDTH = 600;
 const HEIGHT = 120;
 const hover = ref<number | null>(null);
+const gradientId = useId();
 
 const top = computed(() => Math.max(props.max, ...props.points.map((point) => point.players), 1));
 
@@ -38,15 +39,27 @@ const hovered = computed(() => (hover.value === null ? null : coords.value[hover
 function move(event: MouseEvent): void {
     const box = (event.currentTarget as SVGElement).getBoundingClientRect();
     const x = ((event.clientX - box.left) / box.width) * WIDTH;
-    let best = 0;
+    const points = coords.value;
 
-    coords.value.forEach((c, i) => {
-        if (Math.abs(c.x - x) < Math.abs(coords.value[best].x - x)) {
-            best = i;
+    if (points.length === 0) {
+        return;
+    }
+
+    // Coordinates are sorted by x; nearest neighbour in log time.
+    let lo = 0;
+    let hi = points.length - 1;
+
+    while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+
+        if (points[mid].x < x) {
+            lo = mid + 1;
+        } else {
+            hi = mid;
         }
-    });
+    }
 
-    hover.value = best;
+    hover.value = lo > 0 && x - points[lo - 1].x < points[lo].x - x ? lo - 1 : lo;
 }
 </script>
 
@@ -55,13 +68,13 @@ function move(event: MouseEvent): void {
         <template v-if="coords.length">
             <svg :viewBox="`0 0 ${WIDTH} ${HEIGHT}`" preserveAspectRatio="none" @mousemove="move" @mouseleave="hover = null">
                 <defs>
-                    <linearGradient id="players-fill" x1="0" x2="0" y1="0" y2="1">
+                    <linearGradient :id="gradientId" x1="0" x2="0" y1="0" y2="1">
                         <stop offset="0%" style="stop-color: var(--accent)" stop-opacity="0.32" />
                         <stop offset="100%" style="stop-color: var(--accent)" stop-opacity="0" />
                     </linearGradient>
                 </defs>
                 <line v-for="step in [0.25, 0.5, 0.75]" :key="step" x1="0" :x2="WIDTH" :y1="HEIGHT * step" :y2="HEIGHT * step" class="grid" />
-                <path :d="area" fill="url(#players-fill)" />
+                <path :d="area" :fill="`url(#${gradientId})`" />
                 <path :d="line" class="stroke" vector-effect="non-scaling-stroke" />
                 <line v-if="hovered" :x1="hovered.x" :x2="hovered.x" y1="0" :y2="HEIGHT" class="cursor" vector-effect="non-scaling-stroke" />
             </svg>

@@ -74,7 +74,7 @@ const errorCounts = computed(() => {
 });
 
 async function save(): Promise<void> {
-    if (!draft.value || !revision.value) {
+    if (!writable.value || saving.value || !draft.value || !revision.value) {
         return;
     }
 
@@ -150,7 +150,8 @@ function int(field: keyof ServerSettings, event: Event): void {
         <p v-if="error" class="muted">{{ error }}</p>
 
         <template v-else-if="draft && limits">
-            <form ref="form" class="stack" @submit.prevent="save">
+            <form ref="form" @submit.prevent="save">
+                <fieldset class="stack" :disabled="!writable">
                 <section class="card panel">
                     <header class="panel-head">
                         <span class="panel-title"><span class="panel-icon"><KeyRound /></span> Joining</span>
@@ -342,9 +343,10 @@ function int(field: keyof ServerSettings, event: Event): void {
                         </div>
                     </div>
                 </section>
+                </fieldset>
             </form>
 
-            <SaveBar :show="dirty || !!saveError" :saving="saving" :error="saveError" @save="save" @discard="load" />
+            <SaveBar v-if="writable" :show="dirty || !!saveError" :saving="saving" :error="saveError" @save="save" @discard="load" />
         </template>
 
         <div v-else class="stack" aria-busy="true" aria-label="Loading the settings">
@@ -368,6 +370,13 @@ function int(field: keyof ServerSettings, event: Event): void {
 </template>
 
 <style scoped>
+fieldset.stack {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    min-width: 0;
+}
+
 /*
  * One setting in a card: its name and explanation on the left, its fields
  * on the right, with a soft line between settings.

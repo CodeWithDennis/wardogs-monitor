@@ -8,16 +8,23 @@ import type { TrayServer } from '@/types';
  * summary, only when something in it changed (not on every poll). Clicks in
  * the tray menu come back here to open a server.
  */
+let started = false;
+
 export function startTray(): void {
+    if (started) {
+        return;
+    }
+
+    started = true;
     let sent = '';
 
     watch(
         () => (state.ready ? summary() : null),
         (value) => {
-            const json = JSON.stringify(value);
+            const key = value ? `${value.selectedId ?? ''}|${value.servers.map((server) => `${server.id}:${server.name}:${server.state}:${server.players}:${server.maxPlayers}`).join('|')}` : '';
 
-            if (value && json !== sent) {
-                sent = json;
+            if (value && key !== sent) {
+                sent = key;
                 window.panel.tray.summary(value);
             }
         },

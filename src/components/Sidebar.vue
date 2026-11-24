@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Ban, CircleCheck, CircleOff, Gauge, LayoutGrid, Map, Megaphone, PictureInPicture2, Plus, Repeat, Server, SlidersHorizontal, Users } from 'lucide-vue-next';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import ServerSwitcher from '@/components/ServerSwitcher.vue';
 import { BRAND, WORDMARK } from '@/lib/brand';
 import { openView, section, selectedLive, state, VIEWS, type ControlView } from '@/lib/store';
@@ -25,26 +25,35 @@ const brand = ref<HTMLElement | null>(null);
 const wordmark = ref<HTMLElement | null>(null);
 const width = ref<number | null>(null);
 
-onMounted(async () => {
-    await document.fonts.ready;
+let alive = true;
 
-    if (brand.value && wordmark.value) {
+onMounted(() => {
+    document.fonts.ready.then(() => {
+        if (!alive || !brand.value || !wordmark.value) {
+            return;
+        }
+
         const style = getComputedStyle(brand.value);
         const needed = wordmark.value.scrollWidth + parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) + 30;
         const base = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--side-w')) || 273;
         width.value = Math.max(base, Math.ceil(needed));
-    }
+    });
 });
+
+onUnmounted(() => (alive = false));
 
 const sidebarStyle = computed(() => (width.value ? { width: `${width.value}px` } : undefined));
 
 const bansCount = ref<number | null>(null);
 const rotationCount = ref<number | null>(null);
+let loadSeq = 0;
 
 // Separate sources, so the counts are read again only when one of them changes, not on every reading.
 watch(
     [() => state.selectedId, () => state.revision, () => selectedLive.value?.online],
     async ([serverId, , online]) => {
+        const seq = ++loadSeq;
+
         if (!serverId || !online) {
             bansCount.value = null;
             rotationCount.value = null;
@@ -53,6 +62,12 @@ watch(
         }
 
         const [bans, rotation] = await Promise.all([window.panel.server.bans(serverId), window.panel.server.rotation(serverId)]);
+
+        // A slow response from a previously selected server must not overwrite the current counts.
+        if (seq !== loadSeq) {
+            return;
+        }
+
         bansCount.value = bans.error ? null : bans.bans.length;
         rotationCount.value = rotation.error ? null : rotation.entries.length;
     },
@@ -78,11 +93,19 @@ function broadcast(): void {
     state.broadcasting = true;
 }
 
-function playersOnline(serverId: string): string {
-    const live = state.lives[serverId];
+const playersOnline = computed(() => {
+    const counts: Record<string, string> = {};
 
-    return live?.online && live.status ? String(live.status.players) : '';
-}
+    for (const server of state.servers) {
+        const live = state.lives[server.id];
+
+        if (live?.online && live.status) {
+            counts[server.id] = String(live.status.players);
+        }
+    }
+
+    return counts;
+});
 </script>
 
 <template>
@@ -163,7 +186,7 @@ function playersOnline(serverId: string): string {
             >
                 <Server :stroke-width="1.75" />
                 <span class="label truncate">{{ server.name }}</span>
-                <span v-if="playersOnline(server.id)" class="count num">{{ playersOnline(server.id) }}</span>
+                <span v-if="playersOnline[server.id]" class="count num">{{ playersOnline[server.id] }}</span>
             </button>
         </nav>
 
@@ -305,11 +328,5 @@ function playersOnline(serverId: string): string {
     color: var(--text-2);
     font-size: 14px;
     white-space: nowrap;
-}
-
-.beta {
-    height: 22px;
-    font-size: 12px;
-    font-weight: 500;
 }
 </style>

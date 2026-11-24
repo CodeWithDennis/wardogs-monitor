@@ -26,11 +26,12 @@ import {
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import BanListsPanel from '@/components/BanListsPanel.vue';
 import MapArt from '@/components/MapArt.vue';
+import TimeAgo from '@/components/TimeAgo.vue';
 import ViewHeader from '@/components/ViewHeader.vue';
 import { banLists } from '@/lib/banlists';
-import { ago, steamProfileUrl } from '@/lib/format';
+import { steamProfileUrl } from '@/lib/format';
 import { mapName } from '@/lib/maps';
-import { now, removeServer, state, toast } from '@/lib/store';
+import { removeServer, state, toast } from '@/lib/store';
 import { ACCENTS, THEMES } from '@/lib/themes';
 import { setWatchNote, toggleWatch } from '@/lib/watchlist';
 import type { Preferences } from '@/types';
@@ -98,6 +99,15 @@ function zoomBy(direction: number): void {
 const accentLabel = computed(() => ACCENTS.find((accent) => accent.value === state.preferences.accent)?.label ?? '');
 const themeLabel = computed(() => THEMES.find((theme) => theme.value === state.preferences.theme)?.label ?? '');
 
+const miniOpacity = ref(Math.round(state.preferences.miniOpacity * 100));
+
+watch(
+    () => state.preferences.miniOpacity,
+    (value) => {
+        miniOpacity.value = Math.round(value * 100);
+    },
+);
+
 // Broadcasts ------------------------------------------------------------------
 
 const newBroadcast = ref('');
@@ -135,16 +145,21 @@ function removeBroadcast(index: number): void {
 
 const newWatch = ref({ steamId: '', name: '' });
 
-/** Which server a watched player is on right now, if any. */
-function whereIs(steamId: string): string | null {
+const onlineAt = computed<Map<string, string>>(() => {
+    const map = new Map<string, string>();
+
     for (const server of state.servers) {
-        if (state.lives[server.id]?.players.some((player) => player.steamId === steamId)) {
-            return server.name;
+        const live = state.lives[server.id];
+
+        if (live?.online) {
+            for (const player of live.players) {
+                map.set(player.steamId, server.name);
+            }
         }
     }
 
-    return null;
-}
+    return map;
+});
 
 function addWatch(): void {
     if (!/^\d{17}$/.test(newWatch.value.steamId.trim())) {
@@ -157,7 +172,11 @@ function addWatch(): void {
     newWatch.value = { steamId: '', name: '' };
 }
 
-const openUrl = (url: string) => window.panel.openExternal(url);
+function openUrl(url: string): void {
+    if (url) {
+        window.panel.openExternal(url);
+    }
+}
 
 const SHORTCUTS = [
     ['Ctrl+K', 'Search everything: players on every server, servers, views and actions'],
@@ -230,8 +249,8 @@ const SHORTCUTS = [
                     </label>
                     <div class="slider">
                         <span class="muted">Opacity</span>
-                        <input type="range" min="50" max="100" :value="Math.round(state.preferences.miniOpacity * 100)" @input="set({ miniOpacity: Number(($event.target as HTMLInputElement).value) / 100 })" />
-                        <span class="num value">{{ Math.round(state.preferences.miniOpacity * 100) }}%</span>
+                        <input type="range" min="50" max="100" :value="miniOpacity" @input="miniOpacity = Number(($event.target as HTMLInputElement).value)" @change="set({ miniOpacity: miniOpacity / 100 })" />
+                        <span class="num value">{{ miniOpacity }}%</span>
                     </div>
                 </div>
             </section>
@@ -331,7 +350,7 @@ const SHORTCUTS = [
                     <button type="submit" class="btn btn-primary" :disabled="!newBroadcast.trim()"><Plus /> Add</button>
                 </form>
                 <div v-if="state.preferences.broadcasts.length" class="panel-flush">
-                    <div v-for="(message, index) in state.preferences.broadcasts" :key="index + message" class="list-row">
+                    <div v-for="(message, index) in state.preferences.broadcasts" :key="`${index}:${message}`" class="list-row">
                         <template v-if="editing === index">
                             <input v-model="editText" class="input" maxlength="200" autofocus @keydown.enter="saveBroadcast(index)" @keydown.esc="editing = null" />
                             <button type="button" class="btn btn-primary btn-sm" @click="saveBroadcast(index)">Save</button>
@@ -389,9 +408,9 @@ const SHORTCUTS = [
                     <Star class="star" />
                     <span class="watch-who">
                         <strong>{{ entry.name || entry.steamId }}</strong>
-                        <small class="mono muted">{{ entry.steamId }} · added {{ ago(entry.addedAt, now) }}</small>
+                        <small class="mono muted">{{ entry.steamId }} · added <TimeAgo :at="entry.addedAt" /></small>
                     </span>
-                    <span v-if="whereIs(entry.steamId)" class="pill pill-ok">On {{ whereIs(entry.steamId) }}</span>
+                    <span v-if="onlineAt.get(entry.steamId)" class="pill pill-ok">On {{ onlineAt.get(entry.steamId) }}</span>
                     <input class="input note" :value="entry.note" maxlength="200" placeholder="Note, like why" @change="setWatchNote(entry.steamId, ($event.target as HTMLInputElement).value)" />
                     <span class="row-tools">
                         <button type="button" title="Steam profile" @click="openUrl(steamProfileUrl(entry.steamId))"><ExternalLink /></button>

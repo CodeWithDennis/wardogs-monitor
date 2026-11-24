@@ -61,6 +61,7 @@ watch(
     () => state.ready,
     (ready) => {
         if (ready) {
+            clearTimeout(waitTimer);
             waitTimer = setTimeout(finish, WAIT_FOR_READINGS_MS);
         }
     },

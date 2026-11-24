@@ -34,12 +34,21 @@ function splitAddress(): void {
     }
 }
 
+function wipeForm(): void {
+    Object.assign(form, { name: '', host: '', port: '', password: '' });
+}
+
 function close(): void {
+    wipeForm();
     state.addingServer = false;
     state.editingServer = null;
 }
 
 async function save(): Promise<void> {
+    if (saving.value) {
+        return;
+    }
+
     splitAddress();
     saving.value = true;
     error.value = null;
@@ -63,6 +72,7 @@ async function save(): Promise<void> {
         selectServer(result.server.id);
         refreshLive(result.server.id, true);
         toast('ok', editing.value ? `Saved ${result.server.name}` : `Added ${result.server.name}`);
+        wipeForm();
         close();
     } finally {
         saving.value = false;

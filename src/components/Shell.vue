@@ -52,8 +52,6 @@ const wide = computed(() => ['servers', 'settings', 'rotation', 'activity', 'opt
 const showView = computed(() => (section.value === 'control' ? selectedServer.value !== null : section.value !== 'servers' || state.servers.length > 0));
 
 function onKey(event: KeyboardEvent): void {
-    const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement;
-
     if (event.ctrlKey && event.key.toLowerCase() === 'h') {
         event.preventDefault();
         openView('servers');

@@ -32,11 +32,21 @@ function run(action: () => void): void {
     playerMenu.value = null;
 }
 
-const openProfile = (steamId: string) => window.panel.openExternal(steamProfileUrl(steamId));
+function openProfile(steamId: string): void {
+    const url = steamProfileUrl(steamId);
 
-function copy(text: string, what: string): void {
-    navigator.clipboard.writeText(text);
-    toast('info', `Copied ${what}`);
+    if (url) {
+        window.panel.openExternal(url);
+    }
+}
+
+async function copy(text: string, what: string): Promise<void> {
+    try {
+        await navigator.clipboard.writeText(text);
+        toast('info', `Copied ${what}`);
+    } catch {
+        toast('error', `Could not copy ${what}`);
+    }
 }
 
 function close(event: Event): void {
@@ -45,21 +55,26 @@ function close(event: Event): void {
     }
 }
 
+function closeMenu(): void {
+    playerMenu.value = null;
+}
+
 function onKey(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
-        playerMenu.value = null;
+        closeMenu();
     }
 }
 
 onMounted(() => {
     document.addEventListener('mousedown', close);
     window.addEventListener('keydown', onKey);
-    window.addEventListener('blur', () => (playerMenu.value = null));
+    window.addEventListener('blur', closeMenu);
 });
 
 onUnmounted(() => {
     document.removeEventListener('mousedown', close);
     window.removeEventListener('keydown', onKey);
+    window.removeEventListener('blur', closeMenu);
 });
 </script>
 

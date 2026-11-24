@@ -15,8 +15,17 @@ const filter = ref<'all' | 'failed'>('all');
 /** Null until the log is first read, for the skeleton. */
 const entries = ref<ActivityEntry[] | null>(null);
 
+let loadSeq = 0;
+
 async function load(): Promise<void> {
-    entries.value = await window.panel.activity.list(state.activityServer);
+    const seq = ++loadSeq;
+    const list = await window.panel.activity.list(state.activityServer);
+
+    if (seq !== loadSeq) {
+        return;
+    }
+
+    entries.value = list;
 }
 
 onMounted(load);
@@ -30,16 +39,24 @@ const shown = computed(() => {
     return (entries.value ?? []).filter((entry) => (filter.value === 'all' || !entry.ok) && (term === '' || entry.summary.toLowerCase().includes(term)));
 });
 
-/** Group by day, one card each, with how many of the day's actions failed. */
+/** Group by calendar day, one card each, with how many of the day's actions failed. */
 const days = computed(() => {
-    const groups: { day: string; entries: ActivityEntry[]; failed: number }[] = [];
+    const groups: { key: string; day: string; entries: ActivityEntry[]; failed: number }[] = [];
+    const thisYear = new Date().getFullYear();
 
     for (const entry of shown.value) {
-        const day = new Date(entry.at).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+        const date = new Date(entry.at);
+        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
         let group = groups[groups.length - 1];
 
-        if (group?.day !== day) {
-            group = { day, entries: [], failed: 0 };
+        if (group?.key !== key) {
+            const options: Intl.DateTimeFormatOptions = { weekday: 'long', day: 'numeric', month: 'long' };
+
+            if (date.getFullYear() !== thisYear) {
+                options.year = 'numeric';
+            }
+
+            group = { key, day: date.toLocaleDateString('en-GB', options), entries: [], failed: 0 };
             groups.push(group);
         }
 
@@ -65,7 +82,7 @@ const days = computed(() => {
 
     <div class="view-body narrow">
         <div class="stack">
-            <section v-for="group in days" :key="group.day" class="card panel">
+            <section v-for="group in days" :key="group.key" class="card panel">
                 <header class="panel-head">
                     <span class="panel-title"><span class="panel-icon"><CalendarDays /></span> {{ group.day }}</span>
                     <span class="panel-aside">
@@ -73,7 +90,7 @@ const days = computed(() => {
                     </span>
                 </header>
                 <div class="panel-flush">
-                    <div v-for="entry in group.entries" :key="entry.at + entry.summary" class="entry">
+                    <div v-for="(entry, index) in group.entries" :key="`${entry.at}:${index}`" class="entry">
                         <span class="dot" :class="entry.ok ? 'online' : 'offline'" :title="entry.ok ? 'Done' : 'Failed'" />
                         <span class="time num muted">{{ dateTime(entry.at).split(', ').pop() }}</span>
                         <span class="what">

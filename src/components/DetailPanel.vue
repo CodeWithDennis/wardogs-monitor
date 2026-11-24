@@ -26,12 +26,21 @@ const player = computed(() => (state.view === 'players' && state.selectedPlayer 
 const ban = ref<Ban | null>(null);
 const identity = ref<{ serverId: string | null; bannerUrl: string | null } | null>(null);
 const nextEntry = ref<string | null>(null);
+let bansSeq = 0;
+let identitySeq = 0;
 
 watch(
     () => [state.view, state.selectedBan, state.revision] as const,
     async () => {
+        const seq = ++bansSeq;
+
         if (state.view === 'bans' && state.selectedBan && state.selectedId) {
             const answer = await window.panel.server.bans(state.selectedId);
+
+            if (seq !== bansSeq) {
+                return;
+            }
+
             ban.value = answer.bans.find((entry) => entry.steamId === state.selectedBan) ?? null;
         } else {
             ban.value = null;
@@ -44,14 +53,27 @@ watch(
 watch(
     [() => state.selectedId, () => live.value?.online, () => status.value?.rotationNext, () => status.value?.map],
     async ([serverId, online]) => {
+        const seq = ++identitySeq;
+
         if (!serverId || !online) {
             nextEntry.value = null;
 
             return;
         }
 
-        identity.value = await window.panel.server.identity(serverId);
+        const nextIdentity = await window.panel.server.identity(serverId);
+
+        if (seq !== identitySeq) {
+            return;
+        }
+
+        identity.value = nextIdentity;
         const rotation = await window.panel.server.rotation(serverId);
+
+        if (seq !== identitySeq) {
+            return;
+        }
+
         const next = rotation.entries.find((entry) => entry.status === 'next') ?? rotation.entries.find((entry) => entry.index === status.value?.rotationNext);
         nextEntry.value = rotation.enabled && next ? `${mapName(next.map)} · ${modeName(next.experiences)}` : null;
     },
@@ -61,11 +83,19 @@ watch(
 const fill = computed(() => (status.value ? percent(status.value.players, status.value.maxPlayers) : 0));
 const leader = computed(() => [...(status.value?.factions ?? [])].sort((a, b) => b.score - a.score)[0] ?? null);
 
-const openUrl = (url: string) => window.panel.openExternal(url);
+function openUrl(url: string): void {
+    if (url) {
+        window.panel.openExternal(url);
+    }
+}
 
-function copy(text: string, what: string): void {
-    navigator.clipboard.writeText(text);
-    toast('info', `Copied the ${what}`);
+async function copy(text: string, what: string): Promise<void> {
+    try {
+        await navigator.clipboard.writeText(text);
+        toast('info', `Copied the ${what}`);
+    } catch {
+        toast('error', `Could not copy the ${what}`);
+    }
 }
 
 function broadcast(): void {

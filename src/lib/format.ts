@@ -66,6 +66,10 @@ export function ago(iso: string | null | undefined, now = Date.now()): string {
         return '–';
     }
 
+    if (Number.isNaN(Date.parse(iso))) {
+        return '—';
+    }
+
     const seconds = Math.max(0, Math.round((now - new Date(iso).getTime()) / 1000));
 
     if (seconds < 3) {
@@ -88,10 +92,18 @@ export function ago(iso: string | null | undefined, now = Date.now()): string {
 }
 
 export function time(iso: string): string {
+    if (Number.isNaN(Date.parse(iso))) {
+        return '—';
+    }
+
     return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 }
 
 export function dateTime(iso: string): string {
+    if (Number.isNaN(Date.parse(iso))) {
+        return '—';
+    }
+
     return new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
@@ -108,7 +120,13 @@ export function percent(part: number, whole: number): number {
 }
 
 export function steamProfileUrl(steamId: string): string {
-    return `https://steamcommunity.com/profiles/${steamId}`;
+    const id = steamId.trim();
+
+    if (!/^\d{17}$/.test(id)) {
+        return '';
+    }
+
+    return `https://steamcommunity.com/profiles/${encodeURIComponent(id)}`;
 }
 
 /** Ping as good, fair or poor, for its colour. */

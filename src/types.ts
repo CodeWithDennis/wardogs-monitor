@@ -137,6 +137,8 @@ export interface Limits {
     cashMax: number;
 }
 
+export type ActionName = 'broadcast' | 'message' | 'kick' | 'kill' | 'faction' | 'ban' | 'unban' | 'endMatch' | 'restartMatch' | 'changeMap' | 'saveSettings' | 'saveRotation';
+
 export type ActionResult =
     | { ok: true; summary: string }
     | { ok: false; error: string; errors?: Record<string, string>; configChanged?: boolean };
@@ -283,7 +285,7 @@ export interface PanelApi {
         catalog(id: string): Promise<Catalog>;
         identity(id: string): Promise<{ serverId: string | null; bannerUrl: string | null }>;
         settings(id: string): Promise<SettingsAnswer>;
-        act(id: string, name: string, args?: Record<string, unknown>): Promise<ActionResult>;
+        act(id: string, name: ActionName, args?: Record<string, unknown>): Promise<ActionResult>;
         refresh(id: string): Promise<void>;
     };
     activity: { list(serverId?: string | null): Promise<ActivityEntry[]> };

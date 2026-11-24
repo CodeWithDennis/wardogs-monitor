@@ -34,11 +34,6 @@ export function groupOf(serverId: string | null): BanGroup | null {
     return serverId ? (banLists.groups.find((group) => group.serverIds.includes(serverId)) ?? null) : null;
 }
 
-/** The names of a group's servers, as saved in the app. */
-export function serverNames(group: BanGroup): string[] {
-    return group.serverIds.map((id) => state.servers.find((server) => server.id === id)?.name).filter((name): name is string => Boolean(name));
-}
-
 /** "3 bans missing and 1 to lift on 2 servers", or null when the servers match. */
 export function describeDifferences(missing: number, lifting: number, servers: number): string | null {
     if (missing + lifting === 0) {
@@ -96,10 +91,19 @@ export async function removeBanList(group: BanGroup): Promise<void> {
     }
 }
 
+const checkSeq: Record<string, number> = {};
+let previewSeq = 0;
+
 /** Options → "Check differences": read every linked server and show what differs. Writes nothing. */
 export async function checkDifferences(groupId: string): Promise<void> {
+    const seq = (checkSeq[groupId] = (checkSeq[groupId] ?? 0) + 1);
     banLists.checks[groupId] = { loading: true, plan: null, error: null };
     const answer = await window.panel.banLists.plan(groupId);
+
+    if (checkSeq[groupId] !== seq) {
+        return;
+    }
+
     banLists.checks[groupId] = answer.ok ? { loading: false, plan: answer.plan, error: null } : { loading: false, plan: null, error: answer.error };
 }
 
@@ -109,10 +113,11 @@ export async function checkDifferences(groupId: string): Promise<void> {
  * confirmSync.
  */
 export async function openSyncPreview(groupId: string, note: string | null = null): Promise<void> {
+    const seq = ++previewSeq;
     banLists.preview = { groupId, plan: null, error: null, note, loading: true, syncing: false };
     const answer = await window.panel.banLists.plan(groupId);
 
-    if (banLists.preview?.groupId !== groupId) {
+    if (seq !== previewSeq || banLists.preview?.groupId !== groupId) {
         return;
     }
 
@@ -248,17 +253,23 @@ export const startupDifferences = computed(() => {
  * reading, check each group for differences once. Read-only: it only
  * fills the banner, which opens the preview.
  */
-export function startBanLists(): void {
-    let checked = false;
+let started = false;
 
-    watch(
+export function startBanLists(): void {
+    if (started) {
+        return;
+    }
+
+    started = true;
+
+    const stopStartup = watch(
         () => banLists.loaded && state.ready && banLists.groups.flatMap((group) => (group.serverIds.length > 1 ? group.serverIds : [])).every((id) => !state.servers.some((server) => server.id === id) || state.lives[id] !== undefined),
         async (ready) => {
-            if (!ready || checked) {
+            if (!ready) {
                 return;
             }
 
-            checked = true;
+            stopStartup();
             const plans = await Promise.all(banLists.groups.filter((group) => group.serverIds.length > 1).map((group) => window.panel.banLists.plan(group.id)));
             banLists.startup = plans.flatMap((answer) => (answer.ok && answer.plan.missing + answer.plan.lifting > 0 ? [answer.plan] : []));
         },

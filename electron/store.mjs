@@ -56,12 +56,18 @@ function writeJson(name, value) {
         const target = file(name);
         // Each write gets its own temporary file, so a second save can't rename the first one's away.
         const temporary = `${target}.${randomUUID()}.tmp`;
-        await writeFile(temporary, JSON.stringify(value, null, 2), 'utf8');
+        await writeFile(temporary, JSON.stringify(value, null, 2), { encoding: 'utf8', mode: 0o600 });
         await replace(temporary, target);
     };
 
     const next = (writing.get(name) ?? Promise.resolve()).then(run, run);
-    writing.set(name, next.catch(() => undefined));
+    const settled = next.catch(() => undefined);
+    writing.set(name, settled);
+    settled.finally(() => {
+        if (writing.get(name) === settled) {
+            writing.delete(name);
+        }
+    });
 
     return next;
 }
@@ -75,7 +81,15 @@ function encrypt(password) {
 }
 
 function decrypt(secret) {
-    return safeStorage.decryptString(Buffer.from(secret, 'base64'));
+    if (!secret) {
+        throw new Error('No RCON password is saved for this server. Edit the server to enter it.');
+    }
+
+    try {
+        return safeStorage.decryptString(Buffer.from(secret, 'base64'));
+    } catch {
+        throw new Error('Could not read the saved RCON password on this Windows account. Edit the server to re-enter it.');
+    }
 }
 
 /**
@@ -86,10 +100,34 @@ function decrypt(secret) {
 /** @param {StoredServer} server @returns {PublicServer} */
 const publicServer = (server) => ({ id: server.id, name: server.name, host: server.host, port: server.port, demo: Boolean(server.demo) });
 
+/** Cache the encrypted server records in memory so polling avoids constant disk reads. */
+let serverCachePath = '';
+/** @type {StoredServer[] | null} */
+let serverCache = null;
+let serverQueue = Promise.resolve();
+
+function updateServers(run) {
+    const next = serverQueue.then(run, run);
+    serverQueue = next.catch(() => undefined);
+
+    return next;
+}
+
 export const servers = {
     /** @returns {Promise<StoredServer[]>} */
     async all() {
-        return readJson('servers.json', []);
+        const currentPath = file('servers.json');
+
+        if (serverCache && serverCachePath === currentPath) {
+            return serverCache;
+        }
+
+        const loaded = await readJson('servers.json', []);
+        const clean = Array.isArray(loaded) ? loaded : [];
+        serverCachePath = currentPath;
+        serverCache = clean;
+
+        return clean;
     },
 
     async list() {
@@ -112,33 +150,52 @@ export const servers = {
      *
      * @param {{ id?: string, name: string, host: string, port: number, password?: string, demo?: boolean }} input
      */
-    async save(input) {
-        const all = await this.all();
-        const existing = input.id ? all.find((entry) => entry.id === input.id) : undefined;
+    save(input) {
+        return updateServers(async () => {
+            const all = await this.all();
+            const existing = input.id ? all.find((entry) => entry.id === input.id) : undefined;
 
-        /** @type {StoredServer} */
-        const server = {
-            id: existing?.id ?? randomUUID(),
-            name: input.name,
-            host: input.host,
-            port: input.port,
-            secret: input.password ? encrypt(input.password) : existing?.secret ?? '',
-            demo: input.demo ?? existing?.demo ?? false,
-        };
+            /** @type {StoredServer} */
+            const server = {
+                id: existing?.id ?? randomUUID(),
+                name: input.name,
+                host: input.host,
+                port: input.port,
+                secret: input.password ? encrypt(input.password) : existing?.secret ?? '',
+                demo: input.demo ?? existing?.demo ?? false,
+            };
 
-        await writeJson('servers.json', existing ? all.map((entry) => (entry.id === server.id ? server : entry)) : [...all, server]);
+            const next = existing ? all.map((entry) => (entry.id === server.id ? server : entry)) : [...all, server];
+            await writeJson('servers.json', next);
+            serverCachePath = file('servers.json');
+            serverCache = next;
 
-        return publicServer(server);
+            return publicServer(server);
+        });
     },
 
-    async remove(id) {
-        await writeJson('servers.json', (await this.all()).filter((entry) => entry.id !== id));
+    remove(id) {
+        return updateServers(async () => {
+            const next = (await this.all()).filter((entry) => entry.id !== id);
+            await writeJson('servers.json', next);
+            serverCachePath = file('servers.json');
+            serverCache = next;
+        });
     },
 
-    async reorder(ids) {
-        const all = await this.all();
-        const sorted = [...all].sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
-        await writeJson('servers.json', sorted);
+    reorder(ids) {
+        return updateServers(async () => {
+            const all = await this.all();
+            const position = (id) => {
+                const index = ids.indexOf(id);
+
+                return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+            };
+            const sorted = [...all].sort((a, b) => position(a.id) - position(b.id));
+            await writeJson('servers.json', sorted);
+            serverCachePath = file('servers.json');
+            serverCache = sorted;
+        });
     },
 };
 
@@ -161,14 +218,33 @@ export const preferences = {
  * A local log of every action taken from this app, one JSON line each. The
  * website logs its own actions; this keeps the same trail for the desktop.
  */
+const ACTIVITY_MAX_LINES = 2500;
+const ACTIVITY_KEEP_LINES = 2000;
+let activityQueue = Promise.resolve();
+let activityWrites = 0;
+
 export const activity = {
     /** @param {{ serverId: string, serverName: string, action: string, summary: string, ok: boolean, error?: string }} entry */
-    async add(entry) {
-        await mkdir(app.getPath('userData'), { recursive: true });
-        await appendFile(file('activity.log'), `${JSON.stringify({ at: new Date().toISOString(), ...entry })}\n`, 'utf8');
+    add(entry) {
+        const run = async () => {
+            await mkdir(app.getPath('userData'), { recursive: true });
+            const logPath = file('activity.log');
+            await appendFile(logPath, `${JSON.stringify({ at: new Date().toISOString(), ...entry })}\n`, { encoding: 'utf8', mode: 0o600 });
+
+            activityWrites++;
+
+            if (activityWrites % 50 === 0) {
+                await compactActivity(logPath);
+            }
+        };
+
+        const next = activityQueue.then(run, run);
+        activityQueue = next.catch(() => undefined);
+
+        return next;
     },
 
-    /** The newest entries first. */
+    /** The newest entries first. Scans backwards so old history is not parsed unnecessarily. */
     async list(serverId, limit = 200) {
         let text = '';
 
@@ -178,21 +254,48 @@ export const activity = {
             return [];
         }
 
-        return text
-            .split('\n')
-            .filter(Boolean)
-            .map((line) => {
-                try {
-                    return JSON.parse(line);
-                } catch {
-                    return null;
+        const lines = text.split('\n');
+        const results = [];
+
+        for (let i = lines.length - 1; i >= 0 && results.length < limit; i--) {
+            const line = lines[i];
+
+            if (!line) {
+                continue;
+            }
+
+            try {
+                const entry = JSON.parse(line);
+
+                if (entry && (!serverId || entry.serverId === serverId)) {
+                    results.push(entry);
                 }
-            })
-            .filter((entry) => entry && (!serverId || entry.serverId === serverId))
-            .reverse()
-            .slice(0, limit);
+            } catch {
+                // Skip malformed lines.
+            }
+        }
+
+        return results;
     },
 };
+
+async function compactActivity(logPath) {
+    try {
+        const text = await readFile(logPath, 'utf8');
+        const lines = text.split('\n').filter(Boolean);
+
+        if (lines.length <= ACTIVITY_MAX_LINES) {
+            return;
+        }
+
+        const kept = `${lines.slice(-ACTIVITY_KEEP_LINES).join('\n')}\n`;
+        const temporary = `${logPath}.${randomUUID()}.tmp`;
+        await writeFile(temporary, kept, { encoding: 'utf8', mode: 0o600 });
+        await replace(temporary, logPath);
+    } catch {
+        // Compaction is best-effort.
+    }
+}
 
 /**
  * Linked ban lists (see banlists.mjs), in banlists.json. Changes are made

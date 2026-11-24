@@ -8,12 +8,15 @@
  * broadcast is never sent twice.
  */
 
+import pkg from '../package.json' with { type: 'json' };
+
 export const BROADCAST_MAX = 200;
 export const MESSAGE_MAX = 200;
 export const REASON_MAX = 200;
 
 const CONNECT_TIMEOUT_MS = 5000;
-const USER_AGENT = 'ServerPanel/0.1';
+const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
+const USER_AGENT = `WardogsMonitor/${pkg.version}`;
 
 /** An error that is safe to show: it never contains the password. */
 export class RconError extends Error {
@@ -99,6 +102,57 @@ async function send(target, method, endpoint, options = {}) {
     }
 }
 
+/** Cancel an unread body so undici releases the socket cleanly. */
+function discardBody(response) {
+    response.body?.cancel?.().catch(() => {});
+}
+
+/**
+ * Read a response body as UTF-8 up to `maxBytes` so a hostile or broken
+ * endpoint cannot exhaust main-process memory.
+ *
+ * @param {Response} response
+ */
+async function readBoundedText(response, maxBytes = MAX_RESPONSE_BYTES) {
+    const lengthHeader = Number(response.headers.get('content-length'));
+
+    if (Number.isFinite(lengthHeader) && lengthHeader > maxBytes) {
+        discardBody(response);
+        throw RconError.unexpectedAnswer();
+    }
+
+    if (!response.body) {
+        return '';
+    }
+
+    const reader = response.body.getReader();
+    const chunks = [];
+    let total = 0;
+
+    try {
+        while (true) {
+            const { done, value } = await reader.read();
+
+            if (done) {
+                break;
+            }
+
+            total += value.byteLength;
+
+            if (total > maxBytes) {
+                await reader.cancel().catch(() => {});
+                throw RconError.unexpectedAnswer();
+            }
+
+            chunks.push(value);
+        }
+    } finally {
+        reader.releaseLock();
+    }
+
+    return Buffer.concat(chunks, total).toString('utf8');
+}
+
 /**
  * The JSON answer of a successful request. Errors come back as
  * {"error": "…"} or {"error": {"code": "…", "message": "…"}}.
@@ -107,16 +161,22 @@ async function send(target, method, endpoint, options = {}) {
  * @returns {Promise<Record<string, any>>}
  */
 async function payload(response) {
+    if (response.status === 401 || response.status === 403) {
+        discardBody(response);
+        throw RconError.wrongPassword();
+    }
+
     let json = null;
 
     try {
-        json = await response.json();
-    } catch {
-        json = null;
-    }
+        const text = await readBoundedText(response);
+        json = text ? JSON.parse(text) : null;
+    } catch (error) {
+        if (error instanceof RconError) {
+            throw error;
+        }
 
-    if (response.status === 401 || response.status === 403) {
-        throw RconError.wrongPassword();
+        json = null;
     }
 
     if (!response.ok) {
@@ -215,14 +275,24 @@ export const rcon = {
      * @param {string} revision
      */
     async putConfig(target, text, revision) {
-        const response = await send(target, 'PUT', 'config', { text, headers: { 'If-Match': `"${revision}"` } });
+        const cleanRevision = String(revision ?? '').replace(/[\r\n"]/g, '');
+        const response = await send(target, 'PUT', 'config', { text, headers: { 'If-Match': `"${cleanRevision}"` } });
 
         if (response.status === 412) {
+            discardBody(response);
             throw RconError.configChanged();
         }
 
         if (response.status === 422) {
-            const json = await response.json().catch(() => null);
+            let json = null;
+
+            try {
+                const body = await readBoundedText(response);
+                json = body ? JSON.parse(body) : null;
+            } catch {
+                json = null;
+            }
+
             const reasons = (json?.errors ?? [])
                 .filter((error) => typeof error?.message === 'string')
                 .slice(0, 3)

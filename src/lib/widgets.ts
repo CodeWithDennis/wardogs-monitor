@@ -1,21 +1,7 @@
-import { Activity, Swords, Trophy, Zap } from 'lucide-vue-next';
-import type { Component } from 'vue';
 import { state } from '@/lib/store';
 import type { WidgetKind } from '@/types';
 
-/**
- * The widgets, as the main window offers them: small always-on-top windows
- * (electron/widgets.mjs) showing one thing about one server. Any number can
- * be open at once, one of each kind per server.
- */
-export const WIDGETS: { kind: WidgetKind; label: string; description: string; icon: Component }[] = [
-    { kind: 'status', label: 'Status', description: 'Map, mode, score race and player count at a glance.', icon: Activity },
-    { kind: 'score', label: 'Score', description: 'The faction race to 100, big enough to read over the game.', icon: Swords },
-    { kind: 'players', label: 'Top players', description: 'The leaderboard by kills, with deaths and K/D.', icon: Trophy },
-    { kind: 'actions', label: 'Quick actions', description: 'Broadcast, restart or end the match without opening the app.', icon: Zap },
-];
-
-export const widgetLabel = (kind: WidgetKind): string => WIDGETS.find((widget) => widget.kind === kind)?.label ?? 'Widget';
+export { WIDGETS } from '@/lib/widgetMeta';
 
 /** The open widget of a kind on a server, if there is one. */
 export const openWidgetOf = (kind: WidgetKind, serverId: string | null) => state.widgets.find((widget) => widget.kind === kind && widget.serverId === serverId) ?? null;

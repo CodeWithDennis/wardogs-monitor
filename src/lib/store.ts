@@ -1,8 +1,8 @@
 import { computed, markRaw, reactive, ref, watch } from 'vue';
-import type { ActionResult, Limits, Live, OpenWidget, Player, Preferences, SavedServer } from '@/types';
+import type { ActionName, ActionResult, Faction, Limits, Live, LiveStatus, OpenWidget, Player, Preferences, SavedServer } from '@/types';
 
 /** A player who was on a server and is gone now, kept so they can still be banned or watched. */
-export interface LeftPlayer {
+interface LeftPlayer {
     name: string;
     steamId: string;
     faction: string | null;
@@ -41,7 +41,7 @@ export const VIEWS: { id: ControlView; label: string }[] = [
  */
 export type Section = 'servers' | 'control' | 'activity' | 'options';
 
-export function sectionOf(view: View): Section {
+function sectionOf(view: View): Section {
     return view === 'servers' || view === 'activity' || view === 'options' ? view : 'control';
 }
 
@@ -117,7 +117,7 @@ export const selectedLive = computed(() => (state.selectedId ? state.lives[state
 
 /** A clock that ticks every second, for "checked 3s ago". */
 export const now = ref(Date.now());
-setInterval(() => (now.value = Date.now()), 1000);
+let nowTimer: ReturnType<typeof setInterval> | undefined;
 
 // Toasts --------------------------------------------------------------------
 
@@ -130,14 +130,22 @@ export interface Toast {
 
 export const toasts = ref<Toast[]>([]);
 let toastId = 0;
+const toastTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
 export function toast(kind: Toast['kind'], title: string, body?: string): void {
     const id = ++toastId;
     toasts.value = [...toasts.value.slice(-3), { id, kind, title, body }];
-    setTimeout(() => dismissToast(id), kind === 'error' ? 8000 : 4000);
+    toastTimers.set(id, setTimeout(() => dismissToast(id), kind === 'error' ? 8000 : 4000));
 }
 
 export function dismissToast(id: number): void {
+    const timer = toastTimers.get(id);
+
+    if (timer !== undefined) {
+        clearTimeout(timer);
+        toastTimers.delete(id);
+    }
+
     toasts.value = toasts.value.filter((entry) => entry.id !== id);
 }
 
@@ -159,6 +167,7 @@ export const confirmation = ref<(ConfirmRequest & { resolve: (answer: ConfirmAns
 /** Ask, with two ways to go ahead: 'confirm', 'alternative', or null when cancelled. */
 export function choose(request: ConfirmRequest): Promise<ConfirmAnswer> {
     return new Promise((resolve) => {
+        confirmation.value?.resolve(null);
         confirmation.value = { ...request, resolve };
     });
 }
@@ -201,6 +210,10 @@ export async function refreshLive(serverId: string, force = false): Promise<void
             return;
         }
 
+        if (!state.servers.some((server) => server.id === serverId)) {
+            return;
+        }
+
         const previous = state.lives[serverId];
         const live = shareUnchanged(previous, answer);
         state.lives[serverId] = live;
@@ -213,12 +226,64 @@ export async function refreshLive(serverId: string, force = false): Promise<void
             state.history[serverId] = markRaw(next);
         }
     } finally {
-        inFlight[serverId] -= 1;
-        state.loading[serverId] = inFlight[serverId] > 0;
+        if (Object.hasOwn(inFlight, serverId)) {
+            inFlight[serverId] -= 1;
+            state.loading[serverId] = inFlight[serverId] > 0;
+        }
     }
 }
 
-const sameJson = (a: unknown, b: unknown): boolean => a === b || JSON.stringify(a) === JSON.stringify(b);
+function sameFactions(a: Faction[], b: Faction[]): boolean {
+    if (a === b) {
+        return true;
+    }
+
+    if (a.length !== b.length) {
+        return false;
+    }
+
+    for (let i = 0; i < a.length; i++) {
+        const left = a[i];
+        const right = b[i];
+
+        if (left.name !== right.name || left.color !== right.color || left.score !== right.score || left.players !== right.players || left.cash !== right.cash) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+function sameStatus(a: LiveStatus, b: LiveStatus): boolean {
+    if (a === b) {
+        return true;
+    }
+
+    if (a.name !== b.name || a.map !== b.map || a.lighting !== b.lighting || a.zone !== b.zone || a.players !== b.players || a.maxPlayers !== b.maxPlayers || a.rotationNow !== b.rotationNow || a.rotationNext !== b.rotationNext) {
+        return false;
+    }
+
+    const tickA = a.scoreTick;
+    const tickB = b.scoreTick;
+
+    if (tickA !== tickB) {
+        if (!tickA || !tickB || tickA.current !== tickB.current || tickA.min !== tickB.min || tickA.max !== tickB.max) {
+            return false;
+        }
+    }
+
+    if (a.experiences.length !== b.experiences.length) {
+        return false;
+    }
+
+    for (let i = 0; i < a.experiences.length; i++) {
+        if (a.experiences[i] !== b.experiences[i]) {
+            return false;
+        }
+    }
+
+    return sameFactions(a.factions, b.factions);
+}
 
 /**
  * A new reading that keeps the previous one's player objects, status and
@@ -244,9 +309,9 @@ function shareUnchanged(previous: Live | undefined, next: Live): Live {
     let status = next.status;
 
     if (status && previous.status) {
-        if (sameJson(previous.status, status)) {
+        if (sameStatus(previous.status, status)) {
             status = previous.status;
-        } else if (sameJson(previous.status.factions, status.factions)) {
+        } else if (sameFactions(previous.status.factions, status.factions)) {
             status = { ...status, factions: previous.status.factions };
         }
     }
@@ -310,44 +375,93 @@ function notify(title: string, body: string, serverId: string, enabled: boolean)
         return;
     }
 
-    const notice = new Notification(title, { body });
+    const clean = (value: string, max: number) => value.replace(/[\r\n\u2028\u2029]+/g, ' ').slice(0, max);
+    const notice = new Notification(clean(title, 120), { body: clean(body, 240) });
     notice.onclick = () => {
         window.panel.focusMain();
         selectServer(serverId);
     };
+    notice.onclose = () => {
+        notice.onclick = null;
+    };
 }
 
+let started = false;
+let stopPrefs: (() => void) | undefined;
+let stopWidgets: (() => void) | undefined;
 let pollTimer: ReturnType<typeof setTimeout> | undefined;
 let backgroundTimer: ReturnType<typeof setInterval> | undefined;
+const staggerTimers = new Set<ReturnType<typeof setTimeout>>();
+let previousRefreshSeconds = 5;
 
 /** How far apart the cards' readings start. */
 const STAGGER_MS = 120;
-const later = (ms: number) => new Promise<void>((resolve) => (ms > 0 ? setTimeout(resolve, ms) : resolve()));
+
+function clearStaggerTimers(): void {
+    for (const timer of staggerTimers) {
+        clearTimeout(timer);
+    }
+
+    staggerTimers.clear();
+}
+
+function staggerRefresh(serverId: string, delay: number): void {
+    const timer = setTimeout(() => {
+        staggerTimers.delete(timer);
+        refreshLive(serverId).catch(() => undefined);
+    }, delay);
+
+    staggerTimers.add(timer);
+}
+
+function onVisible(): void {
+    if (!document.hidden && state.selectedId) {
+        refreshLive(state.selectedId);
+    }
+}
+
+function armPoll(): void {
+    clearTimeout(pollTimer);
+    pollTimer = setTimeout(runPoll, state.preferences.refreshSeconds * 1000);
+}
+
+function runPoll(): void {
+    if (!document.hidden) {
+        if (state.view === 'servers') {
+            // Spread over a moment, so many cards update in small steps instead of one big frame.
+            const step = Math.min(STAGGER_MS, 1200 / Math.max(1, state.servers.length));
+
+            for (const [index, server] of state.servers.entries()) {
+                staggerRefresh(server.id, index * step);
+            }
+        } else if (state.selectedId) {
+            refreshLive(state.selectedId).catch(() => undefined);
+        }
+    }
+
+    armPoll();
+}
 
 function schedulePoll(): void {
-    clearTimeout(pollTimer);
-    pollTimer = setTimeout(async () => {
-        if (!document.hidden) {
-            if (state.view === 'servers') {
-                // Spread over a moment, so many cards update in small steps instead of one big frame.
-                const step = Math.min(STAGGER_MS, 1200 / Math.max(1, state.servers.length));
-                await Promise.all(state.servers.map((server, index) => later(index * step).then(() => refreshLive(server.id)).catch(() => undefined)));
-            } else if (state.selectedId) {
-                await refreshLive(state.selectedId).catch(() => undefined);
-            }
-        }
-
-        schedulePoll();
-    }, state.preferences.refreshSeconds * 1000);
+    clearStaggerTimers();
+    armPoll();
 }
 
 function refreshBackground(): void {
+    const skipNonSelected = !document.hidden && state.view === 'servers';
+    let index = 0;
+
     for (const server of state.servers) {
+        if (skipNonSelected && server.id !== state.selectedId) {
+            continue;
+        }
+
         // The open server has its own, faster poll, but that one pauses while
         // the window is hidden (in the tray, or minimised). It is read here
         // then, so its down/back and watched-player alerts still fire.
         if (server.id !== state.selectedId || document.hidden) {
-            refreshLive(server.id).catch(() => undefined);
+            staggerRefresh(server.id, index * STAGGER_MS);
+            index += 1;
         }
     }
 }
@@ -421,6 +535,10 @@ export async function removeServer(server: SavedServer): Promise<void> {
     await window.panel.servers.remove(server.id);
     delete state.lives[server.id];
     delete state.history[server.id];
+    delete state.left[server.id];
+    delete state.loading[server.id];
+    delete inFlight[server.id];
+    delete newestRequest[server.id];
 
     if (wasOpen) {
         state.selectedId = null;
@@ -437,47 +555,55 @@ export async function removeServer(server: SavedServer): Promise<void> {
 }
 
 export async function init(): Promise<void> {
+    if (started) {
+        return;
+    }
+
+    started = true;
+
     const [preferences, limits, info] = await Promise.all([window.panel.preferences.get(), window.panel.limits(), window.panel.appInfo()]);
     state.preferences = preferences;
     state.limits = limits;
     state.version = info.version;
+    previousRefreshSeconds = preferences.refreshSeconds;
     await loadServers();
     // One server opens straight on its controls; several start on the cards.
     state.view = state.servers.length === 1 ? 'overview' : 'servers';
     state.ready = true;
 
-    window.panel.preferences.onChange((next) => {
+    stopPrefs = window.panel.preferences.onChange((next) => {
+        const refreshChanged = next.refreshSeconds !== previousRefreshSeconds;
+        previousRefreshSeconds = next.refreshSeconds;
         state.preferences = next;
-        schedulePoll();
+
+        if (refreshChanged) {
+            schedulePoll();
+        }
     });
     state.widgets = await window.panel.widgets.list();
-    window.panel.widgets.onChange((widgets) => (state.widgets = widgets));
+    stopWidgets = window.panel.widgets.onChange((widgets) => (state.widgets = widgets));
 
     for (const server of state.servers) {
         refreshLive(server.id).catch(() => undefined);
     }
 
+    nowTimer = setInterval(() => (now.value = Date.now()), 1000);
     schedulePoll();
     backgroundTimer = setInterval(refreshBackground, BACKGROUND_SECONDS * 1000);
+    document.addEventListener('visibilitychange', onVisible);
 
-    document.addEventListener('visibilitychange', () => {
-        if (!document.hidden && state.selectedId) {
-            refreshLive(state.selectedId);
-        }
-    });
+    watch(
+        () => state.servers.length,
+        () => {
+            clearInterval(backgroundTimer);
+            backgroundTimer = setInterval(refreshBackground, BACKGROUND_SECONDS * 1000);
+        },
+    );
 }
-
-watch(
-    () => state.servers.length,
-    () => {
-        clearInterval(backgroundTimer);
-        backgroundTimer = setInterval(refreshBackground, BACKGROUND_SECONDS * 1000);
-    },
-);
 
 // Actions -------------------------------------------------------------------
 
-export const busy = reactive<Record<string, boolean>>({});
+export const busy = reactive<Partial<Record<ActionName, boolean>>>({});
 
 /** Steam IDs of players being kicked or banned right now, shown fading out. */
 export const leaving = reactive(new Set<string>());
@@ -487,7 +613,7 @@ export const leaving = reactive(new Set<string>());
  * preference allows), with a toast either way. Returns the result, or null
  * when cancelled.
  */
-export async function act(name: string, args: Record<string, unknown> = {}, options: { confirm?: ConfirmRequest; serverId?: string; quiet?: boolean } = {}): Promise<ActionResult | null> {
+export async function act(name: ActionName, args: Record<string, unknown> = {}, options: { confirm?: ConfirmRequest; serverId?: string; quiet?: boolean } = {}): Promise<ActionResult | null> {
     const serverId = options.serverId ?? state.selectedId;
 
     if (!serverId) {
@@ -530,7 +656,9 @@ export async function act(name: string, args: Record<string, unknown> = {}, opti
 
         return result;
     } finally {
-        busy[name] = false;
+        if (Object.hasOwn(busy, name)) {
+            busy[name] = false;
+        }
 
         if (removing && !succeeded) {
             leaving.delete(removing);
