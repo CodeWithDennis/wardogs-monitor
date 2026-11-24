@@ -1,8 +1,13 @@
 # Wardogs Monitor
 
-**Server control for Wardogs** ([wardogsmonitor.com](https://wardogsmonitor.com)). A Windows desktop app to monitor, moderate and run Wardogs dedicated servers: live scores and players, kicks and bans, the match and its map rotation, and every server setting, for as many servers as you run.
+**Free desktop control panel for Wardogs dedicated servers** ([wardogsmonitor.com](https://wardogsmonitor.com)).
+
+Monitor, moderate, and manage as many Wardogs dedicated servers as you run from one fast Windows desktop app: live scores and players, kicks and bans, linked ban lists, match controls, map rotations, server settings, and always-on-top overlay widgets. No account, no subscription, and no telemetry.
 
 [![Build](https://github.com/CodeWithDennis/wardogs-monitor/actions/workflows/build.yml/badge.svg)](https://github.com/CodeWithDennis/wardogs-monitor/actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/CodeWithDennis/wardogs-monitor?include_prereleases&label=release)](https://github.com/CodeWithDennis/wardogs-monitor/releases)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011%20(x64)-0078D6)](#download-and-install)
+[![License](https://img.shields.io/badge/license-Source--Available%20(Free%20to%20Use)-e8b54e)](LICENSE)
 
 ![All servers as cards](docs/screenshots/servers.png)
 
@@ -10,45 +15,42 @@
 
 - [Features](#features)
 - [Screenshots](#screenshots)
-- [Install](#install)
+- [Download and install](#download-and-install)
 - [Connecting a server](#connecting-a-server)
 - [Keyboard shortcuts](#keyboard-shortcuts)
+- [How it works](#how-it-works)
+- [Security and privacy](#security-and-privacy)
 - [Development](#development)
 - [Building and releasing](#building-and-releasing)
-- [Licensing: selling the app](#licensing-selling-the-app)
-- [Renaming and branding](#renaming-and-branding)
-- [How it works](#how-it-works)
 - [Project structure](#project-structure)
-- [Security and privacy](#security-and-privacy)
-- [Before selling](#before-selling)
+- [Contributing](#contributing)
+- [Disclaimer](#disclaimer)
+- [License](#license)
 
 ## Features
 
-**Servers**
-- Every saved server as a card: map picture, online status, players, score race and address.
-- A switcher at the top left jumps between servers. Filter the cards by online or offline, and search by name or address.
-- Edit or remove a server from its ⋯ menu or a right-click. Removing only makes the app forget it; the server is not touched.
+### Multi-server dashboard
+- **Server cards**: every saved server at a glance with map artwork, online status, player count, faction score race, and address.
+- **Quick switching and filtering**: jump between servers from the top-left switcher, filter cards by online or offline status, and search by name or address.
+- **Non-destructive management**: edit or remove servers from the `⋯` menu or right-click menu. Removing a server only removes it from the app; the server itself is never touched.
 
-**One server**
-- **Overview**: the live score race, a broadcast box with ready-made messages, players over time, top players and recent activity.
-- **Players**: filter by faction, sort by name, score or ping, and search by name or Steam ID. Right-click a player to message, move faction, kill, kick, ban, watch, or copy their name or Steam ID. The **Left** tab keeps players who just quit, so they can still be banned.
-- **Match**: restart or end the match, or travel to any map, game mode, modifier, lighting and starting zone.
-- **Rotation**: a drag-and-drop playlist of matches, on or off, ordered or random.
-- **Bans**: list and lift bans, or ban a Steam ID that is offline.
-- **Settings**: join password, reserved spots and players, player slots, level and cash limits, score period, team balance, server name and banner. Values stay within the limits the game accepts.
+### Per-server control
+- **Overview**: live player and faction tiles, score race, player-count chart over time, top players, recent activity, and a broadcast box with saved message templates.
+- **Players**: filter by faction, sort by clicking any column header (name, kills, deaths, K/D, cash, ping), and search by name or Steam ID. Right-click any player to message, change faction, kill, kick, ban, watch, or copy their name or Steam ID. The **Left** tab keeps recently disconnected players so they can still be moderated.
+- **Match**: restart or end the current match, or travel straight to any map, game mode, modifier, lighting, and starting zone.
+- **Rotation**: drag-and-drop match playlist with toggleable enabled state and ordered or random mode.
+- **Bans**: view and lift active bans, or ban an offline Steam ID directly.
+- **Settings**: edit join password, reserved slots and Steam IDs, player limits, level and cash bounds, score period, team balance, server name, and banner with built-in game-limit validation.
 
-**Everywhere**
-- **Search everything (Ctrl+K)**: players on every server by name or Steam ID, players who just left, servers, pages and actions.
-- **Watchlist**: star a player to get a Windows notification whenever they join any server, with a note on why you watch them.
-- **Alerts**: a notification when a server goes down or comes back.
-- **Linked ban lists**: link servers into one shared ban list (Options → Ban lists). On start, or with Sync, the app shows what differs per server and adds the missing bans only after you confirm; unbans made in the app apply to every linked server.
-- **Licence**: one plan, €9.99 a month or €99 a year, with unlimited servers on up to 3 PCs. A licence is activated online once per PC, then works offline for up to 7 days between check-ins. The 14-day trial is unlimited.
-- **Tray**: the app lives in the notification area by the clock. Closing the window hides it there and alerts keep coming; the tray icon shows how many servers are online and how many players, and its menu opens a server, a widget or quits. It can also minimise to the tray, start hidden, or start with Windows (Options → General → Background).
-- **Widgets**: small always-on-top windows to keep over the game, as many as you like at once: **Status** (map, score race, player count), **Score** (the faction race, big), **Top players** (leaderboard by kills) and **Quick actions** (saved and typed broadcasts, restart or end the match, each asking for a second click while confirm actions is on). Pick them from the sidebar, a server card or the detail panel; they reopen where you left them on the next start.
-- **Activity log**: every action taken from the app, per server, with failures.
-- **Themes**: 24 themes (Midnight by default, plus Carbon, Graphite, Blackout, Nord, Dracula, Gruvbox, Tokyo Night and more) and four accent colours. Zoom with Ctrl + / Ctrl − / Ctrl 0 or Ctrl + mouse wheel.
-- **Layout**: the sidebar and the right-hand details always stay in view; the rail can switch to icons only. The window keeps a minimum size (1360×640 at 100% zoom, more when zoomed in) so everything fits. Pages adapt to the space they get. Click a players column header to sort by it.
-- **Demo server**: a pretend server that plays a match on its own, so every control can be tried safely.
+### Moderation and desktop tools
+- **Search everything (`Ctrl+K`)**: command palette across players on every server (including recently left players), saved servers, views, and actions.
+- **Linked ban lists**: group servers to share a single ban list (**Options → Ban lists**). Differences are previewed and only applied after you confirm; unbans made in the app can be lifted across every linked server.
+- **Watchlist and desktop alerts**: star players with notes to get Windows notifications when they join any server, plus alerts when a server goes offline or comes back online.
+- **Always-on-top widgets**: open as many overlay windows as you want over your game—**Status**, **Score**, **Top players**, and **Quick actions**—with adjustable opacity and saved positions across restarts.
+- **System tray mode**: runs quietly in the notification area with a live status tooltip and quick server/widget menu, optional close-to-tray, minimise-to-tray, start hidden, and launch with Windows.
+- **Activity log**: local per-server audit trail of every action taken from the app, including failures.
+- **Themes and zoom**: 24 themes (Midnight, Carbon, Graphite, Blackout, Nord, Dracula, Gruvbox, Tokyo Night, and more), 4 accent colours, and full zoom support (`Ctrl +` / `Ctrl −` / `Ctrl 0` or `Ctrl + scroll`).
+- **Built-in demo server**: simulated three-faction match running locally so you can test every feature safely without touching a live server.
 
 ## Screenshots
 
@@ -57,176 +59,156 @@
 | ![Overview](docs/screenshots/overview.png) | ![Players](docs/screenshots/players.png) |
 | **Match** | **Search everything (Ctrl+K)** |
 | ![Match](docs/screenshots/match.png) | ![Search](docs/screenshots/search.png) |
-| **Themes** | **Trial ended, servers locked** |
-| ![Themes](docs/screenshots/themes.png) | ![Licence](docs/screenshots/licence.png) |
+| **Themes** | **Linked ban lists** |
+| ![Themes](docs/screenshots/themes.png) | ![Linked ban lists](docs/screenshots/ban-lists.png) |
 
-Widgets, and the window with the rail on icons only:
+Always-on-top widgets and collapsed icon rail:
 
 ![Widgets](docs/screenshots/widgets.png)
 
-![Collapsed](docs/screenshots/collapsed.png)
+![Collapsed rail](docs/screenshots/collapsed.png)
 
-## Install
+## Download and install
 
-Download the latest build from the [Releases](https://github.com/CodeWithDennis/wardogs-monitor/releases) page, or from the artifacts of the latest [Build run](https://github.com/CodeWithDennis/wardogs-monitor/actions/workflows/build.yml):
+Download the latest Windows build from the [Releases](https://github.com/CodeWithDennis/wardogs-monitor/releases) page (or from the artifacts of the latest [Build workflow run](https://github.com/CodeWithDennis/wardogs-monitor/actions/workflows/build.yml)):
 
-- `Wardogs Monitor Setup x.y.z.exe`: an installer (choose the folder, adds a Start menu entry).
-- `Wardogs Monitor x.y.z.exe`: a portable exe that runs without installing.
+- **`Wardogs-Monitor-Setup-x.y.z.exe`** — standard installer (choose install folder, adds a Start menu shortcut).
+- **`Wardogs-Monitor-x.y.z-portable.exe`** — portable executable that runs without installation.
 
-The builds are not code-signed yet, so Windows SmartScreen may warn on first start: choose **More info → Run anyway**.
+> **Windows SmartScreen:** Builds are currently unsigned, so Windows SmartScreen may show a warning on first launch. Click **More info → Run anyway** to proceed, or build the app yourself from source.
 
-Requires Windows 10 or 11 (64-bit).
+**Requirements:** Windows 10 or Windows 11 (64-bit).
 
 ## Connecting a server
 
 1. Click **Add server**.
-2. Enter the RCON address and port from your host's panel. On BisectHosting, that is the panel's IP and port (for example `203.0.113.10:9001`), not the internal port 47990 in the ini file. Pasting `ip:port` into the address field fills in both.
+2. Enter your server's RCON IP/hostname and port from your game host's panel.
+   - On BisectHosting, use the panel's RCON IP and port (for example `203.0.113.10:9001`), not the internal port `47990` in `ServerSettings.ini`.
+   - Pasting `ip:port` into the address field automatically splits and fills both inputs.
 3. Enter the RCON password from the `[/Script/WDRCON.WDRCONSettings]` section of `ServerSettings.ini`.
 
-The app checks that the server answers with that password before saving it.
+Wardogs Monitor verifies the connection and password before saving the server.
 
 ## Keyboard shortcuts
 
-| Keys | What it does |
+| Shortcut | Action |
 | --- | --- |
-| Ctrl+K | Search everything |
-| Ctrl+H | All servers as cards |
-| Ctrl+1 … Ctrl+6 | Overview, Players, Match, Rotation, Bans, Settings |
-| Ctrl+F | Jump to the page's search box |
-| F5 or Ctrl+R | Read the server again now |
-| Ctrl + / Ctrl − / Ctrl 0 | Zoom in, out, reset (Ctrl + mouse wheel works too) |
-| ↑ ↓ | Move through players |
-| Right-click | Player actions, anywhere a player is listed |
-| Esc | Close the open player, menu or dialog |
-| Ctrl+Enter | Send a message |
-
-## Development
-
-Requires Node.js 22 or newer and Windows (the app uses Windows DPAPI for passwords).
-
-```bash
-npm install
-npm run dev           # Vite with hot reload, and Electron pointed at it
-npm run mock          # a pretend Wardogs server on 127.0.0.1:47990, password "mock-secret"
-npm test              # unit tests: config editor, RCON client, preferences, licences
-npm run typecheck     # vue-tsc
-npm run check         # typecheck and tests together
-npm run screenshots   # captures every page against the demo server, with a throwaway data folder
-npm run dist          # release/: the installer and the portable exe
-```
-
-npm 11 asks before running install scripts. If Electron's binary was not downloaded (`node_modules/electron/dist` is missing), run `node node_modules/electron/install.js`.
-
-Screenshot mode (`npm run screenshots [folder]`) never touches your own data: it runs with a temporary data folder and the demo server.
-
-## Building and releasing
-
-GitHub Actions ([`.github/workflows/build.yml`](.github/workflows/build.yml)) runs on every push to `main` and every pull request. It installs, typechecks, runs the tests and builds the installer and portable exe on `windows-latest`. The builds are kept as the run's artifacts.
-
-To publish a release, tag the version that is in `package.json` and push the tag. For the first release (0.0.1, already set):
-
-```bash
-git tag v0.0.1
-git push origin v0.0.1
-```
-
-For the next ones, `npm version patch` (or `minor` / `major`) bumps `package.json` and makes the matching tag; then `git push --follow-tags`.
-
-A pushed `v*` tag makes the workflow build both exes and attach them to a GitHub release with generated release notes. The workflow stops if the tag does not match the version in `package.json`.
-
-Code signing: the workflow builds unsigned (`CSC_IDENTITY_AUTO_DISCOVERY=false`). To sign, add the certificate as `CSC_LINK` (base64 .pfx) and `CSC_KEY_PASSWORD` repository secrets, pass them to the build step, and remove that variable.
-
-## Licensing: selling the app
-
-The app runs a **14-day free trial** (`trialDays` in `brand.json`) with unlimited servers. The website starts it the first time the PC is online and keeps its dates (`POST /trials/start`, signed back to the app), so reinstalling or deleting files never restarts it. After that, real servers are locked until a licence key is activated; the demo server always works and never counts. The lock is enforced in Electron's main process, not just hidden in the window.
-
-Every plan has every feature; plans differ in how many servers they run: Basic 3, Clan 5, Community 10, Alliance unlimited. Servers beyond the limit are locked, never deleted: the first ones in the saved order (`servers.json`, the order the switcher shows) stay usable, and adding one more is refused until the user upgrades or removes one.
-
-A licence key is the licence itself (name, email, plan, number of servers, optional end date), signed with an Ed25519 private key. The app ships only the public key, so it can check keys offline but can never make them. Editing a key, or signing one with another private key, makes it invalid. Keys look like `WDM-<licence>.<signature>`.
-
-```bash
-node scripts/license/keygen.mjs      # once: makes license-signing/private.pem and electron/license-public-key.mjs
-node scripts/license/issue.mjs --name "Jane Doe" --email jane@example.com --plan clan --servers 5   # never ends
-node scripts/license/issue.mjs --name "Jane Doe" --email jane@example.com --days 365         # one year
-```
-
-- **Back up `license-signing/private.pem`** somewhere safe and never share or commit it. It is git-ignored and never packaged. Losing it means new keys won't work in the app you already shipped; leaking it lets anyone make keys. Running `keygen.mjs --force` makes a new pair and invalidates every key sold so far.
-- Customers paste their key under **Options → Licence**. **Remove from this PC** frees it to move to another PC.
-- Selling through Lemon Squeezy, Gumroad or Paddle works by issuing a key when an order comes in, by hand or from their webhook with `issue.mjs`.
-- The trial start lives in the app's data folder, so deleting that folder restarts the trial.
-- **Online check** against [wardogsmonitor.com](https://wardogsmonitor.com)'s licence API (`${website}/api/v1`). The website is the source of truth: activating checks the key offline, then `POST /licenses/activate` must answer and take a seat for this PC (no answer, no activation). On start and every 12 hours `POST /licenses/validate` swaps in a re-signed key (renewals, plan changes) and a fresh signed status token (`WDMS-…`) bound to this PC. A key only runs with a genuine token for this PC, and only until the token's `valid_until` (7 days, `offline_grace_days` on the website); a revoked licence is removed. **Remove from this PC** also calls `POST /licenses/deactivate`. Only the key, the PC's ID and its name are sent.
-- **Tamper-proofing**: the PC's ID is derived from Windows' machine ID, so a copied data folder doesn't carry a seat to another PC. The licence state (`licence.dat`) is encrypted with Windows DPAPI and can't be edited or moved to another PC or account. The app remembers the latest time it has seen: a clock turned back (behind that, or behind the website's signed time) locks the app until the website confirms again. Packaged builds ignore every `PANEL_*` test switch and `VITE_DEV_SERVER_URL`, and Electron fuses switch off running as Node, `NODE_OPTIONS` and inspector flags, and only load the app from its integrity-checked `app.asar`.
-- **Test runs** (started from the source, never a packaged app) may point at another website with `PANEL_LICENSE_API` (e.g. `https://wardogs-monitor.test/api/v1`) or switch it `off`; screenshot and click-test runs work without a website, with a local trial and unconfirmed keys.
-
-## Renaming and branding
-
-The product name, tagline, licence key prefix, trial length, website and support email live in [`brand.json`](brand.json). When renaming, also change `productName` in `package.json` and in `index.html` the `<title>` and the boot screen's wordmark (it paints before the app loads brand.json).
-
-The data folder (`%APPDATA%\Wardogs Monitor`) is set by `dataFolder` and stays put across renames; `previousDataFolders` lists older folders whose saved servers move over on first start.
-
-The app icon (`build/icon.png`) and the tray icons (`build/tray/`) are rendered from `src/assets/brand/mark.svg` with `npx electron scripts/make-icon.mjs`.
+| `Ctrl+K` | Open Search everything (command palette) |
+| `Ctrl+H` | Show all servers as cards |
+| `Ctrl+1` … `Ctrl+6` | Switch between Overview, Players, Match, Rotation, Bans, and Settings |
+| `Ctrl+F` | Focus the search box in the current view |
+| `F5` or `Ctrl+R` | Refresh the current server immediately |
+| `Ctrl +` / `Ctrl −` / `Ctrl 0` | Zoom in, zoom out, or reset zoom (`Ctrl + mouse wheel` works too) |
+| `↑` / `↓` | Move through players |
+| `Right-click` | Open player actions menu |
+| `Esc` | Close the open player panel, menu, or dialog |
+| `Ctrl+Enter` | Send a message |
 
 ## How it works
 
-Wardogs dedicated servers expose an HTTP RCON API at `http://host:port/v1`, with the RCON password as a Bearer token. The app reads:
+Wardogs dedicated servers expose an HTTP RCON API at `http://host:port/v1`, authenticated with the RCON password as a Bearer token.
 
-| Endpoint | Used for |
+| Endpoint | Purpose |
 | --- | --- |
-| `GET status`, `players`, `health` | The live reading, every few seconds |
-| `GET bans`, `rotation`, `server-id`, `sponsor` | Bans, rotation, join code and banner |
-| `GET catalog/maps`, `catalog/lightings`, `catalog/experiences`, `catalog/maps/{map}/…` | The map, mode, lighting and zone pickers |
-| `GET config` / `PUT config` (with `If-Match`) | Settings and rotation, edited in `ServerSettings.ini` |
+| `GET status`, `players`, `health` | Live status, player list, and uptime polling |
+| `GET bans`, `rotation`, `server-id`, `sponsor` | Active bans, map rotation, join code, and banner |
+| `GET catalog/maps`, `catalog/lightings`, `catalog/experiences`, `catalog/maps/{map}/…` | Map, game mode, modifier, lighting, and zone pickers |
+| `GET config` / `PUT config` (with `If-Match`) | Reading and updating `ServerSettings.ini` |
+| `POST match/end`, `match/restart`, `match/map`, `broadcast`, `players/{id}/…`, `PATCH players/{id}`, `POST/DELETE bans` | Match, messaging, moderation, and ban actions |
 
-It writes with `POST match/end`, `match/restart` and `match/map`, `POST broadcast`, `POST players/{id}/kick|kill|message`, `PATCH players/{id}` (faction) and `POST/DELETE bans`.
+Reads retry once on a dropped connection; write actions never retry automatically so kicks, bans, and broadcasts are never sent twice. Config updates rewrite only changed keys and pass the `If-Match` revision header so concurrent admins never silently overwrite each other.
 
-Reads retry once on a dropped connection; writes never retry, so a kick or broadcast is never sent twice. Settings are saved by rewriting only the lines that changed in the config document, and the server refuses a save made against a stale revision, so two admins never overwrite each other.
+## Security and privacy
+
+- **Encrypted credentials**: RCON passwords are encrypted on disk using Windows DPAPI (Electron `safeStorage`) tied to your Windows user account and never enter the renderer process.
+- **Config isolation**: the raw `ServerSettings.ini` document (which includes the RCON password) stays strictly in Electron's main process; the UI only receives the parsed editable values.
+- **Hardened Electron runtime**: renderer windows run sandboxed with `contextIsolation: true`, `nodeIntegration: false`, a strict Content Security Policy, packaged-build Electron fuses (`runAsNode: false`, `onlyLoadAppFromAsar: true`, ASAR integrity validation), and an external-link allowlist limited to Steam profiles and `wardogsmonitor.com`.
+- **No telemetry**: the app makes zero background calls to external services. Network traffic goes strictly between your PC and your configured Wardogs servers.
+- **Transport note**: the Wardogs dedicated server RCON API uses plain HTTP, so credentials travel unencrypted between your PC and your game server, as with any RCON client for the game.
+
+## Development
+
+Requires **Node.js 22+** and **Windows** (credentials rely on Windows DPAPI).
+
+```bash
+npm install
+npm run dev           # Start Vite with hot reload and Electron
+npm run mock          # Run a local mock Wardogs server on 127.0.0.1:47990 (password: "mock-secret")
+npm test              # Run unit tests (config editor, RCON client, preferences, ban lists, tray, widgets)
+npm run typecheck     # Run vue-tsc type checking
+npm run check         # Run typecheck and unit tests together
+npm run screenshots   # Capture views against the demo server using a temporary data folder
+npm run dist          # Build Windows installer and portable exe into release/
+```
+
+> **npm 11 note:** npm 11 may prompt before running lifecycle install scripts. If Electron's binary was skipped (`node_modules/electron/dist` is missing), run `node node_modules/electron/install.js`.
+
+## Building and releasing
+
+GitHub Actions ([`.github/workflows/build.yml`](.github/workflows/build.yml)) runs on every push to `main` and every pull request on `windows-latest`: it installs dependencies, typechecks, runs tests, and builds both the NSIS installer and portable executable as workflow artifacts.
+
+To publish a release, make sure `version` in `package.json` matches the tag and push a `v*` tag:
+
+```bash
+npm version patch   # or minor / major
+git push --follow-tags
+```
+
+The workflow verifies that the tag matches `package.json`, builds both executables, and publishes them to GitHub Releases with generated release notes.
 
 ## Project structure
 
 ```
-brand.json                  product name, tagline, licence prefix, trial length
+brand.json                  Product name, tagline, app ID, data folder, website
 electron/
-  main.mjs                  windows, IPC, zoom, the licence gate, the data folder
-  preload.cjs               the only bridge to the window (no passwords cross it)
-  rcon.mjs                  the Wardogs RCON HTTP client
-  config.mjs                ServerSettings.ini editor and settings limits
-  service.mjs               live readings, catalog, settings and actions, with caching
-  store.mjs                 saved servers (DPAPI-encrypted passwords) and the activity log
-  preferences.mjs           preferences, defaults and migrations
-  tray-status.mjs           the tray icon's tooltip and server list wording
-  license-core.mjs          licence key signing, checking, trial maths and server limits
-  license-online.mjs        the website's licence API: activate, validate, deactivate
-  license.mjs               the licence, trial and device ID on this PC
-mock/wardogs-mock.mjs       the pretend server behind the demo and the tests
+  main.mjs                  Windows, tray, IPC handlers, zoom, data folder migration
+  preload.cjs               Sandboxed IPC bridge exposed to the renderer
+  rcon.mjs                  Wardogs HTTP RCON client
+  config.mjs                ServerSettings.ini parser, writer, and validation limits
+  service.mjs               Cached server reads, actions, and linked ban-list syncing
+  store.mjs                 Saved servers (DPAPI-encrypted passwords), ban lists, activity log
+  preferences.mjs           User preferences, defaults, and migrations
+  banlists.mjs              Linked ban-list planning, tombstones, and sync logic
+  tray-status.mjs           System tray tooltip and menu formatting
+  widgets.mjs               Overlay widget specs and multi-display placement
+mock/
+  wardogs-mock.mjs          Mock Wardogs RCON server used for demo mode and tests
 scripts/
-  dev.mjs                   Vite + Electron for development
-  license/                  keygen.mjs and issue.mjs for selling
-  screenshots.mjs, capture.mjs   screenshot mode
-  make-icon.mjs             renders build/icon.png and the tray icons in build/tray/
+  dev.mjs                   Development runner (Vite + Electron)
+  screenshots.mjs           Throwaway-profile screenshot runner
+  capture.mjs               Automated screenshot, tray, and click checks
+  make-icon.mjs             Generates build/icon.png and build/tray/ icons from mark.svg
 src/
-  App.vue, main.ts          the window (main panel or a widget)
-  components/               shell, rail, sidebar, switcher, cards, dialogs, palette…
+  App.vue, main.ts          Vue entry point (main panel and widget windows)
+  components/               Shell, rail, sidebar, switcher, cards, dialogs, widgets, palette
   views/                    Servers, Overview, Players, Match, Rotation, Bans, Settings, Activity, Options
-  lib/                      store, themes, brand, formatting, maps, watchlist
-  assets/                   map pictures, fonts, brand mark
-tests/                      node:test suites
+  lib/                      Reactive store, themes, brand config, formatting, maps, watchlist, tray
+  assets/                   Map artwork, Oxanium font, brand SVG mark
+tests/                      node:test unit test suites
 ```
 
-## Security and privacy
+## Contributing
 
-- RCON passwords are encrypted with Windows DPAPI (Electron `safeStorage`) for the current Windows account, and never reach the window.
-- The config document, which contains the RCON password, stays in the main process; the window only ever sees the values it edits.
-- The window runs sandboxed with context isolation and a strict content security policy. Only Steam profiles and the product website open in the browser.
-- Nothing is sent anywhere except to your own servers and, for a licence, the website's licence API: only the key, a random ID for this PC and the PC's name. Keys and the website's status tokens are checked offline with the public key.
-- The Wardogs RCON API itself is plain HTTP, so the password travels unencrypted between your PC and the server, as it does with every RCON tool for this game.
+Bug reports, feature ideas, and pull requests to this repository are welcome!
 
-## Before selling
+1. Fork this repository on GitHub and create a feature or fix branch.
+2. Keep commits clear and follow [Conventional Commits](https://www.conventionalcommits.org/).
+3. Run `npm run check` before opening a pull request.
+4. Open a pull request against `main`.
 
-- **The name**: "Wardogs" is the game's trademark, and the developer runs `rcon.wardogs.com`. Get the developer's permission before selling under this name, or rename the app (see [Renaming and branding](#renaming-and-branding)).
-- **The map pictures** in `src/assets/maps` are screenshots from the game; they need the developer's permission too, or replacing with your own artwork.
-- **Code signing**: a certificate removes the SmartScreen warning and builds trust with buyers.
-- **Support email**: fill in `supportEmail` in `brand.json`. The website is set to wardogsmonitor.com, so the Licence page shows a **Buy a licence** button.
+Please note that forks are permitted solely for testing locally and contributing back to this repository—see [License](#license) below. By submitting a pull request or patch, you agree to the contribution terms in Section 4 of [`LICENSE`](LICENSE).
 
-## Licence
+## Disclaimer
 
-Proprietary. Copyright © 2026 CodeWithDennis. All rights reserved. See [LICENSE](LICENSE).
+Wardogs Monitor is an independent, unofficial community tool and is **not** affiliated with, endorsed by, or sponsored by the developers of Wardogs. "Wardogs" and the map imagery in `src/assets/maps/` belong to their respective owners.
+
+This software is provided **"AS IS"**, without warranty of any kind. You use it at your own risk; the author is not responsible for server downtime, configuration errors, unintended kicks or bans, or data loss.
+
+## License
+
+**Source-Available — Free to Use.** Copyright © 2026 CodeWithDennis. All rights reserved.
+
+- **You may** download, install, and use Wardogs Monitor for free, inspect the source code, build it locally for your own use, and fork/modify it to contribute fixes or improvements back to this repository.
+- **You may not** copy, rebrand, repackage, publish, sell, or distribute your own modified or unmodified versions or forks of this software to others.
+
+See [`LICENSE`](LICENSE) for the full terms, warranty disclaimer, limitation of liability, and third-party license attributions.
