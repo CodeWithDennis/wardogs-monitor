@@ -167,51 +167,6 @@ export async function captureViews({ app, mainWindow, getWidget, dir }) {
 
     await captureDialogs({ mainWindow, run, click, shot });
 
-    // Licence: the trial, then an ended trial (servers locked), then a key activated.
-    const tab = (label) => run(`[...document.querySelectorAll('.tabs button')].find((b) => b.textContent.includes('${label}'))?.click()`);
-    await click('[data-section="options"]');
-    await wait(300);
-    await tab('Licence');
-    await wait(700);
-    await shot('21-licence-trial');
-
-    const { writeFileSync: writeSync, readFileSync: readSync } = await import('node:fs');
-    writeSync(path.join(app.getPath('userData'), 'trial.json'), JSON.stringify({ startedAt: '2020-01-01T00:00:00.000Z' }));
-    const reloaded = new Promise((resolve) => web.once('did-finish-load', resolve));
-    web.reload();
-    await reloaded;
-    await wait(4000);
-    await click('[data-section="servers"]');
-    await wait(2500);
-    console.log('[capture] after trial ended:', await run(`document.querySelector('.view-header h2')?.textContent + ' / ' + (document.querySelector('.banner')?.textContent ?? 'no banner').trim()`));
-    await shot('22-trial-ended');
-
-    // The banner at the smallest window, and zoomed out, must stay clear of the window's own buttons.
-    mainWindow.setSize(1180, 720);
-    await wait(800);
-    await shot('22b-trial-ended-min');
-    const captionArea = () => run(`(() => { const d = document.createElement('div'); d.style.cssText = 'position:fixed;width:var(--caption-w);height:var(--caption-h)'; document.body.append(d); const r = [d.offsetWidth, d.offsetHeight]; d.remove(); return r; })()`);
-    console.log('[capture] caption area (CSS px) at 100%:', await captionArea());
-    await run(`window.panel.setZoom(0.67)`);
-    await wait(800);
-    console.log('[capture] caption area (CSS px) at 67%:', await captionArea());
-    await shot('22c-trial-ended-zoomed-out');
-    await run(`window.panel.setZoom(1)`);
-    mainWindow.setSize(1500, 920);
-    await wait(800);
-
-    const { issueKey } = await import('../electron/license-core.mjs');
-    const brandJson = JSON.parse(readSync(new URL('../brand.json', import.meta.url), 'utf8'));
-    const licenceKey = issueKey({ name: 'Jane Doe', email: 'jane@example.com', plan: 'pro', days: 365 }, readSync(new URL('../license-signing/private.pem', import.meta.url), 'utf8'), brandJson.licenseKeyPrefix);
-    await click('.banner .btn');
-    await wait(600);
-    await run(`(() => { const t = document.querySelector('.activate textarea'); t.value = ${JSON.stringify(licenceKey)}; t.dispatchEvent(new Event('input')); })()`);
-    await wait(300);
-    await click('.activate .btn-primary');
-    await wait(1500);
-    console.log('[capture] licence after activating:', await run(`window.panel.license.status().then((s) => s.state)`));
-    await shot('23-licensed');
-
     // Window sizes: from the smallest the window allows up. In front, so each size paints before it is captured.
     mainWindow.show();
     mainWindow.focus();

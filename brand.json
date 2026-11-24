@@ -10,7 +10,5 @@
         "Phantom Server Control"
     ],
     "website": "https://wardogsmonitor.com",
-    "supportEmail": "",
-    "licenseKeyPrefix": "WDM",
-    "trialDays": 14
+    "supportEmail": ""
 }

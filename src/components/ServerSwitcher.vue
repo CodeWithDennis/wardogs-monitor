@@ -20,7 +20,7 @@ const entries = computed(() =>
         return {
             server,
             dot: live === undefined ? 'pending' : live.online ? 'online' : 'offline',
-            detail: live?.online && live.status ? `${live.status.players}/${live.status.maxPlayers} · ${mapName(live.status.map)}` : live?.locked ? 'Locked' : live ? 'Offline' : 'Connecting…',
+            detail: live?.online && live.status ? `${live.status.players}/${live.status.maxPlayers} · ${mapName(live.status.map)}` : live ? 'Offline' : 'Connecting…',
         };
     }),
 );

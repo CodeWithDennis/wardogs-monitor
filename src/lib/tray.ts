@@ -1,12 +1,12 @@
 import { watch } from 'vue';
-import { openOptions, selectServer, state } from '@/lib/store';
+import { selectServer, state } from '@/lib/store';
 import type { TrayServer } from '@/types';
 
 /**
  * The window's side of the tray icon. Main shows a tooltip and menu of the
  * servers but never reads them itself, so the window sends it a small
  * summary, only when something in it changed (not on every poll). Clicks in
- * the tray menu come back here: open a server, or Options → Licence.
+ * the tray menu come back here to open a server.
  */
 export function startTray(): void {
     let sent = '';
@@ -29,7 +29,6 @@ export function startTray(): void {
             selectServer(serverId);
         }
     });
-    window.panel.tray.onOpenLicence(() => openOptions('licence'));
 }
 
 function summary(): { selectedId: string | null; servers: TrayServer[] } {
@@ -41,7 +40,7 @@ function summary(): { selectedId: string | null; servers: TrayServer[] } {
             return {
                 id: server.id,
                 name: server.name,
-                state: !live ? 'unknown' : live.locked ? 'locked' : live.online ? 'online' : 'offline',
+                state: !live ? 'unknown' : live.online ? 'online' : 'offline',
                 players: live?.status?.players ?? 0,
                 maxPlayers: live?.status?.maxPlayers ?? 0,
             };

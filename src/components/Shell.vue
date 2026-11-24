@@ -7,7 +7,6 @@ import CommandPalette from '@/components/CommandPalette.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import DetailPanel from '@/components/DetailPanel.vue';
 import IconRail from '@/components/IconRail.vue';
-import LicenceBanner from '@/components/LicenceBanner.vue';
 import PlayerActionDialog from '@/components/PlayerActionDialog.vue';
 import PlayerContextMenu from '@/components/PlayerContextMenu.vue';
 import ServerDialog from '@/components/ServerDialog.vue';
@@ -90,7 +89,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
 
         <template v-if="state.ready">
             <main v-if="showView" class="content" :class="{ wide }">
-                <LicenceBanner />
                 <BanListBanner :wide="wide" />
                 <component :is="current" :key="`${state.view}:${state.selectedId}`" />
             </main>

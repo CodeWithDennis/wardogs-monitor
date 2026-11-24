@@ -112,7 +112,6 @@ const dot = (serverId: string) => (state.lives[serverId]?.online ? 'online' : st
                     <span class="dot" :class="dot(server.id)" />
                     <span class="server-name truncate">{{ server.name }}</span>
                     <span v-if="elsewhere(group, server.id)" class="muted where">In “{{ elsewhere(group, server.id)!.name }}”</span>
-                    <span v-else-if="state.lives[server.id]?.locked" class="muted where">Locked</span>
                     <span v-else-if="state.lives[server.id] && !state.lives[server.id]!.online" class="muted where">Offline</span>
                     <span class="mono muted address">{{ server.host }}:{{ server.port }}</span>
                 </label>

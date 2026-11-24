@@ -530,13 +530,12 @@ async function noteBanList(serverId, name, args) {
 }
 
 /**
- * Read the bans of every server in a group, fresh. A server that is gone,
- * locked by the licence or not answering is skipped with the reason.
+ * Read the bans of every server in a group, fresh. A server that is gone
+ * or not answering is skipped with the reason.
  *
  * @param {import('./banlists.mjs').BanGroup} group
- * @param {(serverId: string) => Promise<{ message: string } | null>} isLocked why a server is locked, or null
  */
-async function readLinked(group, isLocked) {
+async function readLinked(group) {
     const saved = await servers.list();
 
     return Promise.all(
@@ -545,13 +544,6 @@ async function readLinked(group, isLocked) {
 
             if (!server) {
                 return { serverId, serverName: 'A removed server', skipped: 'It is no longer saved in the app.' };
-            }
-
-            // The lock check answers with the reason (plan limit, trial or licence ended), or nothing.
-            const lock = await isLocked(serverId);
-
-            if (lock) {
-                return { serverId, serverName: server.name, skipped: `Locked: ${typeof lock === 'object' && lock.message ? lock.message : 'the free trial has ended.'}` };
             }
 
             forget(serverId, 'bans');
@@ -581,16 +573,15 @@ const publicPlan = (plan) => ({
  * nothing.
  *
  * @param {string} groupId
- * @param {(serverId: string) => Promise<{ message: string } | null>} isLocked why a server is locked, or null
  */
-export async function banListPlan(groupId, isLocked) {
+export async function banListPlan(groupId) {
     const group = (await banLists.list()).find((entry) => entry.id === groupId);
 
     if (!group) {
         return { ok: false, error: 'That ban list no longer exists.' };
     }
 
-    return { ok: true, plan: publicPlan(planSync(group, await readLinked(group, isLocked))) };
+    return { ok: true, plan: publicPlan(planSync(group, await readLinked(group))) };
 }
 
 /**
@@ -601,9 +592,8 @@ export async function banListPlan(groupId, isLocked) {
  *
  * @param {string} groupId
  * @param {string} confirmed
- * @param {(serverId: string) => Promise<{ message: string } | null>} isLocked why a server is locked, or null
  */
-export async function banListSync(groupId, confirmed, isLocked) {
+export async function banListSync(groupId, confirmed) {
     if (syncing.has(groupId)) {
         return { ok: false, error: 'This ban list is syncing already.' };
     }
@@ -611,7 +601,7 @@ export async function banListSync(groupId, confirmed, isLocked) {
     syncing.add(groupId);
 
     try {
-        return await syncGroup(groupId, confirmed, isLocked);
+        return await syncGroup(groupId, confirmed);
     } catch (error) {
         return { ok: false, error: message(error) };
     } finally {
@@ -622,14 +612,14 @@ export async function banListSync(groupId, confirmed, isLocked) {
 /** Groups being synced now, so a double click never sends the same writes twice. */
 const syncing = new Set();
 
-async function syncGroup(groupId, confirmed, isLocked) {
+async function syncGroup(groupId, confirmed) {
     const group = (await banLists.list()).find((entry) => entry.id === groupId);
 
     if (!group) {
         return { ok: false, error: 'That ban list no longer exists.' };
     }
 
-    const plan = planSync(group, await readLinked(group, isLocked));
+    const plan = planSync(group, await readLinked(group));
 
     if (plan.fingerprint !== confirmed) {
         return { ok: false, changed: true, error: 'The bans changed since the preview. Check the new differences and confirm again.', plan: publicPlan(plan) };

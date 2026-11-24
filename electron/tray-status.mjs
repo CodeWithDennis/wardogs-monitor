@@ -6,11 +6,11 @@
  * tested on its own.
  */
 
-/** @typedef {'online' | 'offline' | 'locked' | 'unknown'} TrayServerState */
+/** @typedef {'online' | 'offline' | 'unknown'} TrayServerState */
 /** @typedef {{ id: string, name: string, state: TrayServerState, players: number, maxPlayers: number }} TrayServer */
 /** @typedef {{ selectedId: string | null, servers: TrayServer[] }} TraySummary */
 
-const STATES = ['online', 'offline', 'locked', 'unknown'];
+const STATES = ['online', 'offline', 'unknown'];
 
 /** Windows caps a tray tooltip at 127 characters. */
 const TOOLTIP_MAX = 127;
@@ -77,7 +77,6 @@ export function serverLabel(server) {
     const how = {
         online: `${server.players}/${server.maxPlayers} players`,
         offline: 'offline',
-        locked: 'locked',
         unknown: 'checking…',
     }[server.state];
 

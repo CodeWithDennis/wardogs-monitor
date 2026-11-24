@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { ArrowRight, Ellipsis, Lock, Pencil, PictureInPicture2, Trash2, WifiOff } from 'lucide-vue-next';
+import { ArrowRight, Ellipsis, Pencil, PictureInPicture2, Trash2, WifiOff } from 'lucide-vue-next';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import FactionScores from '@/components/FactionScores.vue';
 import MapArt from '@/components/MapArt.vue';
 import TimeAgo from '@/components/TimeAgo.vue';
 import { formatUptime, modeName, percent } from '@/lib/format';
-import { BILLING_URL, openBilling } from '@/lib/licence';
 import { mapName } from '@/lib/maps';
 import { removeServer, selectServer, state } from '@/lib/store';
 import { pickWidgets } from '@/lib/widgets';
@@ -68,7 +67,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onDocument));
             <MapArt :map="status?.map" :lighting="status?.lighting" class="art" />
             <span class="status pill" :class="live === undefined ? '' : live.online ? 'pill-ok' : 'pill-bad'">
                 <span class="dot" :class="live === undefined ? 'pending' : live.online ? 'online' : 'offline'" />
-                {{ live === undefined ? 'Connecting' : live.online ? 'Online' : live.locked ? 'Locked' : 'Offline' }}
+                {{ live === undefined ? 'Connecting' : live.online ? 'Online' : 'Offline' }}
             </span>
 
             <div class="menu-wrap" @click.stop>
@@ -107,10 +106,9 @@ onUnmounted(() => document.removeEventListener('mousedown', onDocument));
 
             <template v-else-if="live">
                 <div class="down">
-                    <component :is="live.locked ? Lock : WifiOff" />
+                    <WifiOff />
                     <span>{{ live.error }}</span>
                 </div>
-                <button v-if="live.lockedBy === 'plan' && BILLING_URL" type="button" class="btn btn-primary btn-sm upgrade" @click.stop="openBilling">Upgrade</button>
             </template>
 
             <template v-else>
@@ -317,10 +315,6 @@ onUnmounted(() => document.removeEventListener('mousedown', onDocument));
     flex: none;
     margin-top: 2px;
     color: var(--bad);
-}
-
-.upgrade {
-    margin-top: 12px;
 }
 
 .foot {
