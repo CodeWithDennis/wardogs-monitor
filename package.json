@@ -75,7 +75,7 @@
     "type": "git",
     "url": "https://github.com/CodeWithDennis/wardogs-monitor.git"
   },
-  "license": "UNLICENSED",
+  "license": "SEE LICENSE IN LICENSE",
   "engines": {
     "node": ">=22"
   },

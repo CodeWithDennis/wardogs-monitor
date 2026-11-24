@@ -1,14 +1,87 @@
+Wardogs Monitor Source-Available License
 Copyright (c) 2026 CodeWithDennis. All rights reserved.
 
-This software and its source code are proprietary and confidential. No part
-of it may be copied, modified, distributed, sublicensed or sold without the
-prior written permission of the copyright holder.
+This software is free to use and its source code is publicly visible,
+but it is NOT open-source software. All rights not expressly granted below
+are reserved by the copyright holder ("Licensor").
 
-The compiled application is licensed to end users under the terms of the
-licence they purchased. Using it beyond the free trial without a valid
-licence key is not permitted.
+1. DEFINITIONS
 
-Third-party components keep their own licences: Electron, Vue, Vite and
-lucide (MIT), Inter (SIL Open Font License 1.1) and Oxanium (SIL Open Font
-License 1.1, see src/assets/fonts/oxanium/OFL.txt). Map pictures are from the
-game Wardogs and belong to its developer.
+"Software" means the source code, compiled binaries, scripts,
+documentation, and original assets contained in this repository, excluding
+the third-party components and game assets listed in Section 7.
+
+"Repository" means the official repository hosted at
+https://github.com/CodeWithDennis/wardogs-monitor.
+
+2. PERMITTED USE
+
+Subject to the restrictions in Section 3, Licensor grants you a limited,
+non-exclusive, non-transferable, revocable, royalty-free license to:
+
+  a) Download, install, and use official releases of the Software for free
+     to monitor and administer Wardogs dedicated servers.
+  b) View and inspect the source code and build the Software locally for
+     your own personal or server-administration use.
+  c) Fork the Repository and modify the Software solely for the purpose of
+     developing and submitting bug fixes, improvements, or other
+     contributions back to the official Repository (for example, via pull
+     requests), and testing those changes locally.
+
+3. RESTRICTIONS
+
+Unless you have prior written permission from the Licensor, you may NOT:
+
+  a) Copy, publish, host, distribute, or make available the Software—or
+     any modified, rebranded, repackaged, or derivative version of it—in
+     source or compiled form to any third party, whether for free or for
+     a fee.
+  b) Maintain or distribute your own fork, build, release, or mirror of
+     the Software as a standalone product or alternative distribution.
+  c) Sell, rent, lease, sublicense, bundle with another product, or offer
+     the Software as a hosted or commercial service.
+  d) Remove, obscure, or alter any copyright, license, or attribution
+     notice in the Software.
+
+4. CONTRIBUTIONS
+
+By submitting a pull request, patch, issue, or other contribution to the
+Repository, you represent that you have the legal right to make that
+submission and you grant the Licensor a perpetual, worldwide,
+non-exclusive, royalty-free, irrevocable license (with the right to
+sublicense) to use, reproduce, modify, display, perform, and distribute
+your contribution as part of the Software under this License or any other
+license chosen by the Licensor.
+
+5. TERMINATION
+
+This License and the permissions granted under it terminate automatically
+if you fail to comply with any of its terms.
+
+6. DISCLAIMER OF WARRANTY AND LIMITATION OF LIABILITY
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT. YOU USE THE
+SOFTWARE ENTIRELY AT YOUR OWN RISK.
+
+IN NO EVENT SHALL THE LICENSOR, AUTHORS, OR CONTRIBUTORS BE LIABLE FOR ANY
+DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, SERVER DOWNTIME, DATA LOSS, CORRUPTED
+CONFIGURATION FILES, UNINTENDED MODERATION ACTIONS, LOSS OF ACCESS, OR
+LOSS OF PROFITS), HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF OR INABILITY TO USE THIS SOFTWARE,
+EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+7. THIRD-PARTY COMPONENTS AND TRADEMARKS
+
+Third-party libraries and fonts retain their own licenses:
+  - Electron, Vue, Vite, and lucide-vue-next (MIT License)
+  - Inter via @fontsource/inter (SIL Open Font License 1.1)
+  - Oxanium (SIL Open Font License 1.1; see src/assets/fonts/oxanium/OFL.txt)
+
+"Wardogs" and the map imagery in src/assets/maps/ are the property of the
+developers of Wardogs. Wardogs Monitor is an independent, unofficial
+community tool and is not affiliated with, endorsed by, or sponsored by the
+developers of Wardogs.
